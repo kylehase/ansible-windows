@@ -1,4 +1,4 @@
-﻿name: Automation CI
+name: Automation CI
 
 on:
   push:
@@ -26,12 +26,7 @@ jobs:
 
       - name: Validate Master Playbook Syntax
         run: |
-          if ! ansible-playbook --syntax-check playbook.yml -i inventory.ini -vvv > syntax_err.txt 2>&1; then
-            ERR_MSG=$(cat syntax_err.txt | tr '\r\n' ' ' | sed 's/[^a-zA-Z0-9 ._:/-]//g' | cut -c 1-300)
-            echo "::error::$ERR_MSG"
-            cat syntax_err.txt
-            exit 1
-          fi
+          ansible-playbook --syntax-check playbook.yml -i inventory.ini
 
       - name: Validate Test Playbook Syntax
         run: |
@@ -47,4 +42,4 @@ jobs:
       - name: Run Pester Unit Tests
         shell: powershell
         run: |
-          Invoke-Pester -Path ./tests/bootstrap.Tests.ps1
+          Invoke-Pester -Script ./tests/bootstrap.Tests.ps1

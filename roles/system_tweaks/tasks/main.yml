@@ -83,14 +83,8 @@
       $wallPath = "C:\Users\$($env:USERNAME)\Pictures\Andor Death Star.png"
       if (Test-Path $wallPath) {
           if (-not ([System.Management.Automation.PSTypeName]'Wallpaper').Type) {
-              Add-Type @"
-              using System;
-              using System.Runtime.InteropServices;
-              public class Wallpaper {
-                  [DllImport("user32.dll", CharSet = CharSet.Auto)]
-                  public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
-              }
-"@
+              $def = 'using System; using System.Runtime.InteropServices; public class Wallpaper { [DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni); }'
+              Add-Type -TypeDefinition $def
           }
           [Wallpaper]::SystemParametersInfo(0x0014, 0, $wallPath, 0x0001 -bor 0x0002) | Out-Null
           $Ansible.Changed = $true
