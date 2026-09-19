@@ -1,0 +1,111 @@
+﻿---
+- name: Run Automated Verification Tests on Windows Workstation
+  hosts: windows
+  gather_facts: false
+
+  tasks:
+    # ---------------------------------------------------------
+    # System Tweaks Tests
+    # ---------------------------------------------------------
+    - name: "[TEST] Verify Timezone auto-update registry setting"
+      ansible.windows.win_reg_stat:
+        path: HKLM:\SYSTEM\CurrentControlSet\Services\tzautoupdate
+        name: Start
+      register: tz_stat
+      failed_when: not tz_stat.exists or tz_stat.value != 3
+
+    - name: "[TEST] Verify W32Time service is set to auto-start"
+      ansible.windows.win_service:
+        name: W32Time
+      register: time_svc
+      failed_when: time_svc.start_mode != "auto"
+
+    - name: "[TEST] Verify ISO Date format in Registry"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Control Panel\International
+        name: sShortDate
+      register: date_stat
+      failed_when: not date_stat.exists or date_stat.value != "yyyy-MM-dd"
+
+    - name: "[TEST] Verify 24-hour Time format in Registry"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Control Panel\International
+        name: sShortTime
+      register: time_stat
+      failed_when: not time_stat.exists or time_stat.value != "HH:mm"
+
+    # ---------------------------------------------------------
+    # Debloat Tests
+    # ---------------------------------------------------------
+    - name: "[TEST] Verify Telemetry Policy is Disabled (0)"
+      ansible.windows.win_reg_stat:
+        path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection
+        name: AllowTelemetry
+      register: telem_stat
+      failed_when: not telem_stat.exists or telem_stat.value != 0
+
+    - name: "[TEST] Verify DiagTrack service is disabled"
+      ansible.windows.win_service:
+        name: DiagTrack
+      register: diag_svc
+      failed_when: diag_svc.start_mode != "disabled"
+
+    - name: "[TEST] Verify Bing in Start Search is Disabled"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Search
+        name: BingSearchEnabled
+      register: bing_stat
+      failed_when: not bing_stat.exists or bing_stat.value != 0
+
+    - name: "[TEST] Verify Windows 10 Classic Context Menu CLSID exists"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32
+      register: ctx_stat
+      failed_when: not ctx_stat.exists
+
+    - name: "[TEST] Verify File Extensions are visible"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+        name: HideFileExt
+      register: ext_stat
+      failed_when: not ext_stat.exists or ext_stat.value != 0
+
+    - name: "[TEST] Verify Copilot is turned off"
+      ansible.windows.win_reg_stat:
+        path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot
+        name: TurnOffWindowsCopilot
+      register: copilot_stat
+      failed_when: not copilot_stat.exists or copilot_stat.value != 1
+
+    # ---------------------------------------------------------
+    # Tools & Shortcuts Tests
+    # ---------------------------------------------------------
+    - name: "[TEST] Verify Tools directory binaries exist"
+      ansible.windows.win_stat:
+        path: "C:\\Users\\{{ ansible_user }}\\Tools\\{{ item }}"
+      register: tool_files
+      loop:
+        - winrar-extract.vbs
+        - mac-kbd-copy-paste.exe
+        - WinXCorners.exe
+        - nircmd.exe
+      failed_when: not tool_files.stat.exists
+
+    - name: "[TEST] Verify Startup shortcuts exist"
+      ansible.windows.win_stat:
+        path: "C:\\Users\\{{ ansible_user }}\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{{ item }}.lnk"
+      register: startup_lnks
+      loop:
+        - WinXCorners
+        - mac-kbd-copy-paste
+      failed_when: not startup_lnks.stat.exists
+
+    - name: "[TEST] Verify legacy volume-increment shortcut was removed"
+      ansible.windows.win_stat:
+        path: "C:\\Users\\{{ ansible_user }}\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\volume-increment_v2new.lnk"
+      register: vol_lnk
+      failed_when: vol_lnk.stat.exists
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: "ALL UNIT & VERIFICATION TESTS PASSED SUCCESSFULLY!"
