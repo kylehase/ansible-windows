@@ -1,13 +1,10 @@
-﻿name: Automation CI
+name: Automation CI
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-
-permissions:
-  contents: write
 
 jobs:
   ansible-syntax:
@@ -28,23 +25,8 @@ jobs:
           pip install ansible
 
       - name: Validate Master Playbook Syntax
-        id: syntax_master
-        continue-on-error: true
         run: |
-          ansible-playbook --syntax-check playbook.yml -i inventory.ini -vvv > syntax_error.txt 2>&1
-
-      - name: Publish Syntax Log Branch
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -B debug-log
-          git add syntax_error.txt
-          git commit -m "Debug syntax log" || true
-          git push origin debug-log --force
-
-      - name: Enforce Syntax Pass
-        if: steps.syntax_master.outcome != 'success'
-        run: exit 1
+          ansible-playbook --syntax-check playbook.yml -i inventory.ini
 
       - name: Validate Test Playbook Syntax
         run: |

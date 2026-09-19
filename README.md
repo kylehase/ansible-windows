@@ -1,4 +1,4 @@
-﻿# Ansible Windows Automation
+# Ansible Windows Automation
 
 Automated provisioning and configuration management for Windows workstations using Ansible and Semaphore.
 

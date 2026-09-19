@@ -1,4 +1,4 @@
-﻿---
+---
 install_profile: "full"  # options: core, full
 
 core_packages:
