@@ -1,14 +1,3 @@
-﻿<#
-.SYNOPSIS
-    Bootstrap Windows for Ansible / Semaphore over OpenSSH.
-    Run this once in an elevated (Administrator) PowerShell on a fresh Windows machine.
-#>
-
-[CmdletBinding()]
-param (
-    [string]$AuthorizedKey = ""
-)
-
 Write-Host "=== Configuring Windows for Ansible Management ===" -ForegroundColor Cyan
 
 # 1. Ensure current network connection is set to Private
