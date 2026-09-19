@@ -1,39 +1,123 @@
 ﻿---
-- name: Ensure Debloat working directory exists
-  ansible.windows.win_file:
-    path: "C:\\Temp\\Debloat"
-    state: directory
+# ---------------------------------------------------------
+# Telemetry & Diagnostics
+# ---------------------------------------------------------
+- name: Disable Windows Telemetry via Policy
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection
+    name: AllowTelemetry
+    data: 0
+    type: dword
 
-- name: Copy CustomAppsList for Debloat
-  ansible.windows.win_copy:
-    src: CustomAppsList
-    dest: "C:\\Temp\\Debloat\\CustomAppsList"
+- name: Disable Telemetry and Diagnostic Services
+  ansible.windows.win_service:
+    name: "{{ item }}"
+    start_mode: disabled
+    state: stopped
+  loop:
+    - DiagTrack
+    - dmwappushservice
+  failed_when: false
 
-- name: Execute Win11Debloat script
+# ---------------------------------------------------------
+# Start Menu & Search Tweaks
+# ---------------------------------------------------------
+- name: Disable Bing web results in Start Menu search
+  ansible.windows.win_regedit:
+    path: "{{ item.path }}"
+    name: "{{ item.name }}"
+    data: "{{ item.data }}"
+    type: dword
+  loop:
+    - { path: "HKCU:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer", name: "DisableSearchBoxSuggestions", data: 1 }
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search", name: "BingSearchEnabled", data: 0 }
+
+- name: Hide Search bar on Taskbar
+  ansible.windows.win_regedit:
+    path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Search
+    name: SearchboxTaskbarMode
+    data: 0
+    type: dword
+
+- name: Disable Start Menu suggestions and promoted app recommendations
+  ansible.windows.win_regedit:
+    path: HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+    name: "{{ item }}"
+    data: 0
+    type: dword
+  loop:
+    - SystemPaneSuggestionsEnabled
+    - SubscribedContent-338388Enabled
+    - SubscribedContent-338389Enabled
+    - SubscribedContent-353694Enabled
+    - SubscribedContent-353696Enabled
+
+- name: Disable Lockscreen tips and advertisements
+  ansible.windows.win_regedit:
+    path: HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+    name: "{{ item }}"
+    data: 0
+    type: dword
+  loop:
+    - RotatingLockScreenOverlayEnabled
+    - SubscribedContent-338387Enabled
+
+# ---------------------------------------------------------
+# Explorer & UI Enhancements
+# ---------------------------------------------------------
+- name: Always show known file extensions in File Explorer
+  ansible.windows.win_regedit:
+    path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+    name: HideFileExt
+    data: 0
+    type: dword
+
+- name: Restore classic Windows 10 full context menu
+  ansible.windows.win_regedit:
+    path: HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32
+    name: "(Default)"
+    data: ""
+    type: string
+
+- name: Disable Windows Copilot
+  ansible.windows.win_regedit:
+    path: "{{ item }}"
+    name: TurnOffWindowsCopilot
+    data: 1
+    type: dword
+  loop:
+    - HKCU:\Software\Policies\Microsoft\Windows\WindowsCopilot
+    - HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot
+
+# ---------------------------------------------------------
+# Bloatware App Removal (UWP / Appx)
+# ---------------------------------------------------------
+- name: Remove bloatware Appx and Provisioned packages
   ansible.windows.win_powershell:
+    parameters:
+      AppList: "{{ bloatware_apps }}"
     script: |
-      $debloatDir = "C:\Temp\Debloat"
-      $debloatScript = Join-Path $debloatDir "Win11Debloat.ps1"
-      
-      try {
-          $onlineScript = Invoke-RestMethod "https://debloat.raphi.re/" -TimeoutSec 15 -ErrorAction Stop
-          Set-Content -Path $debloatScript -Value $onlineScript -Force
-      } catch {
-          Write-Warning "Could not fetch online Win11Debloat: $_"
+      $apps = $using:AppList
+      $changed = $false
+
+      foreach ($app in $apps) {
+          # Remove provisioned packages (so new profiles never install them)
+          $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "*$app*" }
+          if ($provisioned) {
+              foreach ($pkg in $provisioned) {
+                  Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName -ErrorAction SilentlyContinue | Out-Null
+                  $changed = $true
+              }
+          }
+
+          # Remove currently installed packages for all users
+          $installed = Get-AppxPackage -AllUsers -Name "*$app*" -ErrorAction SilentlyContinue
+          if ($installed) {
+              foreach ($pkg in $installed) {
+                  Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue | Out-Null
+                  $changed = $true
+              }
+          }
       }
 
-      if (Test-Path $debloatScript) {
-          $customApps = Join-Path $debloatDir "CustomAppsList"
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $debloatScript `
-              -DisableTelemetry `
-              -DisableBing `
-              -DisableSuggestions `
-              -DisableLockscreenTips `
-              -RevertContextMenu `
-              -HideTaskbarSearch `
-              -ShowFileExtensions `
-              -DisableCopilot `
-              -RemoveApps `
-              -CustomAppsList $customApps
-          $Ansible.Changed = $true
-      }
+      $Ansible.Changed = $changed
