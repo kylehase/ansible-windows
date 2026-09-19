@@ -1,4 +1,4 @@
-name: Automation CI
+﻿name: Automation CI
 
 on:
   push:
@@ -26,7 +26,12 @@ jobs:
 
       - name: Validate Master Playbook Syntax
         run: |
-          ansible-playbook --syntax-check playbook.yml -i inventory.ini
+          if ! ansible-playbook --syntax-check playbook.yml -i inventory.ini -vvv > syntax_err.txt 2>&1; then
+            ERR_MSG=$(cat syntax_err.txt | tr '\r\n' ' ' | sed 's/[^a-zA-Z0-9 ._:/-]//g' | cut -c 1-300)
+            echo "::error::$ERR_MSG"
+            cat syntax_err.txt
+            exit 1
+          fi
 
       - name: Validate Test Playbook Syntax
         run: |
