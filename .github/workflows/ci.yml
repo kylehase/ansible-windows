@@ -1,4 +1,4 @@
-﻿name: Ansible CI
+﻿name: Automation CI
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  lint-and-syntax:
-    name: Syntax & Lint Checks
+  ansible-lint-and-syntax:
+    name: Ansible Syntax & Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -39,3 +39,31 @@ jobs:
       - name: Run Ansible Lint
         run: |
           ansible-lint --offline playbook.yml tests/verify.yml || true
+
+  powershell-tests:
+    name: PowerShell Unit Tests & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run PSScriptAnalyzer Linting
+        shell: pwsh
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+          $results = Invoke-ScriptAnalyzer -Path ./bootstrap.ps1 -Severity Error,Warning
+          if ($results) {
+              $results | Format-Table
+              exit 1
+          } else {
+              Write-Host "PSScriptAnalyzer passed with 0 errors or warnings!" -ForegroundColor Green
+          }
+
+      - name: Run Pester Unit Tests
+        shell: pwsh
+        run: |
+          Install-Module -Name Pester -Force -Scope CurrentUser
+          $res = Invoke-Pester -Path ./tests/bootstrap.Tests.ps1 -PassThru
+          if ($res.FailedCount -gt 0) {
+              exit 1
+          }
