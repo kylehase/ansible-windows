@@ -102,7 +102,7 @@
       }
 
 - name: Add platform-tools to User PATH
-  community.windows.win_path:
+  ansible.windows.win_path:
     elements:
       - "C:\\Users\\{{ ansible_user }}\\Tools\\platform-tools"
     scope: user

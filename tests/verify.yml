@@ -8,7 +8,7 @@
     # System Tweaks Tests
     # ---------------------------------------------------------
     - name: "[TEST] Verify Timezone auto-update registry setting"
-      community.windows.win_reg_stat:
+      ansible.windows.win_reg_stat:
         path: HKLM:\SYSTEM\CurrentControlSet\Services\tzautoupdate
         name: Start
       register: tz_stat
@@ -21,14 +21,14 @@
       failed_when: time_svc.start_mode != "auto"
 
     - name: "[TEST] Verify ISO Date format in Registry"
-      community.windows.win_reg_stat:
+      ansible.windows.win_reg_stat:
         path: HKCU:\Control Panel\International
         name: sShortDate
       register: date_stat
       failed_when: not date_stat.exists or date_stat.value != "yyyy-MM-dd"
 
     - name: "[TEST] Verify 24-hour Time format in Registry"
-      community.windows.win_reg_stat:
+      ansible.windows.win_reg_stat:
         path: HKCU:\Control Panel\International
         name: sShortTime
       register: time_stat
@@ -38,7 +38,7 @@
     # Debloat Tests
     # ---------------------------------------------------------
     - name: "[TEST] Verify Telemetry Policy is Disabled (0)"
-      community.windows.win_reg_stat:
+      ansible.windows.win_reg_stat:
         path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection
         name: AllowTelemetry
       register: telem_stat
@@ -51,27 +51,27 @@
       failed_when: diag_svc.start_mode != "disabled"
 
     - name: "[TEST] Verify Bing in Start Search is Disabled"
-      community.windows.win_reg_stat:
+      ansible.windows.win_reg_stat:
         path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Search
         name: BingSearchEnabled
       register: bing_stat
       failed_when: not bing_stat.exists or bing_stat.value != 0
 
     - name: "[TEST] Verify Windows 10 Classic Context Menu CLSID exists"
-      community.windows.win_reg_stat:
+      ansible.windows.win_reg_stat:
         path: HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32
       register: ctx_stat
       failed_when: not ctx_stat.exists
 
     - name: "[TEST] Verify File Extensions are visible"
-      community.windows.win_reg_stat:
+      ansible.windows.win_reg_stat:
         path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
         name: HideFileExt
       register: ext_stat
       failed_when: not ext_stat.exists or ext_stat.value != 0
 
     - name: "[TEST] Verify Copilot is turned off"
-      community.windows.win_reg_stat:
+      ansible.windows.win_reg_stat:
         path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot
         name: TurnOffWindowsCopilot
       register: copilot_stat
