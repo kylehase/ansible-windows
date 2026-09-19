@@ -1,4 +1,4 @@
-name: Automation CI
+﻿name: Automation CI
 
 on:
   push:
@@ -27,7 +27,13 @@ jobs:
 
       - name: Validate Master Playbook Syntax
         run: |
-          ansible-playbook --syntax-check playbook.yml -i inventory.ini
+          ansible-playbook --syntax-check playbook.yml -i inventory.ini -vvv 2>&1 | tee output.txt || {
+            echo "### Playbook Syntax Check Error" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
 
       - name: Validate Test Playbook Syntax
         run: |
