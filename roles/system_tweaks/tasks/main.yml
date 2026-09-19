@@ -1,4 +1,4 @@
-﻿---
+---
 - name: Enable automatic timezone update service
   ansible.windows.win_regedit:
     path: HKLM:\SYSTEM\CurrentControlSet\Services\tzautoupdate
@@ -35,8 +35,8 @@
     data: "C:\\Windows\\system32\\zipfldr.dll"
     type: string
   loop:
-    - Registry::HKEY_CLASSES_ROOT\WinRAR.ZIP\DefaultIcon
-    - Registry::HKEY_CLASSES_ROOT\zipfile\DefaultIcon
+    - HKCR:\WinRAR.ZIP\DefaultIcon
+    - HKCR:\zipfile\DefaultIcon
     - HKCU:\Software\Classes\WinRAR.ZIP\DefaultIcon
     - HKCU:\Software\Classes\zipfile\DefaultIcon
 
@@ -47,8 +47,8 @@
     data: 'wscript.exe "%USERPROFILE%\Tools\winrar-extract.vbs" "%1"'
     type: string
   loop:
-    - Registry::HKEY_CLASSES_ROOT\WinRAR.ZIP\shell\open\command
-    - Registry::HKEY_CLASSES_ROOT\zipfile\shell\open\command
+    - HKCR:\WinRAR.ZIP\shell\open\command
+    - HKCR:\zipfile\shell\open\command
     - HKCU:\Software\Classes\WinRAR.ZIP\shell\open\command
     - HKCU:\Software\Classes\zipfile\shell\open\command
 

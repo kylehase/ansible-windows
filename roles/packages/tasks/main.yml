@@ -1,7 +1,7 @@
-﻿---
+---
 - name: Determine packages to install
   ansible.builtin.set_fact:
-    target_packages: "{{ core_packages + (workstation_packages if install_profile == 'full' else []) }}"
+    target_packages: "{{ core_packages + ((install_profile == 'full') | ternary(workstation_packages, [])) }}"
 
 - name: Install software via winget
   ansible.windows.win_command: >

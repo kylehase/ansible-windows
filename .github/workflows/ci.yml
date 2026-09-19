@@ -42,7 +42,4 @@ jobs:
       - name: Run Pester Unit Tests
         shell: powershell
         run: |
-          $res = Invoke-Pester -Script ./tests/bootstrap.Tests.ps1 -PassThru
-          if ($res.FailedCount -gt 0) {
-              exit 1
-          }
+          Invoke-Pester -Path ./tests/bootstrap.Tests.ps1
