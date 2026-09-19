@@ -26,7 +26,12 @@ jobs:
 
       - name: Validate Master Playbook Syntax
         run: |
-          ansible-playbook --syntax-check playbook.yml -i inventory.ini
+          if ! ansible-playbook --syntax-check playbook.yml -i inventory.ini -vvv > err.txt 2>&1; then
+            cat err.txt
+            MSG=$(tail -n 25 err.txt | tr '\r\n' ' ' | sed 's/[^a-zA-Z0-9 ._:/-]//g' | cut -c 1-500)
+            echo "::error title=Ansible Syntax Error::$MSG"
+            exit 4
+          fi
 
       - name: Validate Test Playbook Syntax
         run: |
@@ -42,4 +47,4 @@ jobs:
       - name: Run Pester Unit Tests
         shell: powershell
         run: |
-          Invoke-Pester -Script ./tests/bootstrap.Tests.ps1
+          Invoke-Pester -Path ./tests/bootstrap.Tests.ps1
