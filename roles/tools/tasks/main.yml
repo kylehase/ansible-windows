@@ -1,4 +1,4 @@
-﻿---
+---
 - name: Ensure Tools directory exists
   ansible.windows.win_file:
     path: "C:\\Users\\{{ ansible_user }}\\Tools"
@@ -102,14 +102,14 @@
       }
 
 - name: Add platform-tools to User PATH
-  ansible.windows.win_path:
+  community.windows.win_path:
     elements:
       - "C:\\Users\\{{ ansible_user }}\\Tools\\platform-tools"
     scope: user
     state: present
 
 - name: Configure Startup shortcuts
-  ansible.windows.win_shortcut:
+  community.windows.win_shortcut:
     src: "{{ item.src }}"
     dest: "C:\\Users\\{{ ansible_user }}\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{{ item.name }}.lnk"
     directory: "C:\\Users\\{{ ansible_user }}\\Tools"
