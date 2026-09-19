@@ -1,0 +1,123 @@
+﻿---
+- name: Ensure Tools directory exists
+  ansible.windows.win_file:
+    path: "C:\\Users\\{{ ansible_user }}\\Tools"
+    state: directory
+
+- name: Deploy static tools and scripts
+  ansible.windows.win_copy:
+    src: "{{ item }}"
+    dest: "C:\\Users\\{{ ansible_user }}\\Tools\\{{ item }}"
+  loop:
+    - winrar-extract.vbs
+    - settings.ini
+    - mac-kbd-copy-paste.exe
+    - mac-kbd_copy_paste_v2new.ahk
+
+- name: Fetch and update NirCmd (64-bit)
+  ansible.windows.win_powershell:
+    script: |
+      $target = "C:\Users\$($env:USERNAME)\Tools\nircmd.exe"
+      $url = "https://www.nirsoft.net/utils/nircmd-x64.zip"
+      $zip = Join-Path $env:TEMP "nircmd-x64.zip"
+      $extract = Join-Path $env:TEMP "nircmd_extracted"
+      try {
+          Invoke-WebRequest -Uri $url -OutFile $zip -UserAgent "PowerShell" -TimeoutSec 20 -ErrorAction Stop
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          $downloadedExe = Join-Path $extract "nircmd.exe"
+          if (Test-Path $downloadedExe) {
+              $shouldCopy = $true
+              if (Test-Path $target) {
+                  $currVer = (Get-Item $target).VersionInfo.FileVersionRaw
+                  $newVer = (Get-Item $downloadedExe).VersionInfo.FileVersionRaw
+                  if ($currVer -and $newVer -and ($currVer -ge $newVer)) { $shouldCopy = $false }
+              }
+              if ($shouldCopy) {
+                  Copy-Item -Path $downloadedExe -Destination $target -Force
+                  $Ansible.Changed = $true
+              }
+          }
+          Remove-Item $zip, $extract -Recurse -Force -ErrorAction SilentlyContinue
+      } catch {
+          Write-Warning "Failed to fetch NirCmd: $_"
+      }
+
+- name: Fetch and update WinXCorners
+  ansible.windows.win_powershell:
+    script: |
+      $target = "C:\Users\$($env:USERNAME)\Tools\WinXCorners.exe"
+      try {
+          $api = "https://api.github.com/repos/vhanla/winxcorners/releases/latest"
+          $rel = Invoke-RestMethod -Uri $api -Headers @{ "User-Agent" = "PowerShell" } -TimeoutSec 10 -ErrorAction Stop
+          $asset = $rel.assets | Where-Object { $_.name -like "*WinXCorners*.zip" } | Select-Object -First 1
+          if ($asset) {
+              $zip = Join-Path $env:TEMP "WinXCorners.zip"
+              $extract = Join-Path $env:TEMP "WinXCorners_extracted"
+              Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UserAgent "PowerShell" -TimeoutSec 30 -ErrorAction Stop
+              Expand-Archive -Path $zip -DestinationPath $extract -Force
+              $exe = Join-Path $extract "WinXCorners.exe"
+              if (Test-Path $exe) {
+                  Stop-Process -Name WinXCorners -Force -ErrorAction SilentlyContinue
+                  Copy-Item -Path $exe -Destination $target -Force
+                  $Ansible.Changed = $true
+              }
+              Remove-Item $zip, $extract -Recurse -Force -ErrorAction SilentlyContinue
+          }
+      } catch {
+          Write-Warning "Failed to fetch WinXCorners: $_"
+      }
+
+- name: Fetch and update Android platform-tools
+  ansible.windows.win_powershell:
+    script: |
+      $ptDest = "C:\Users\$($env:USERNAME)\Tools\platform-tools"
+      $url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
+      $zip = Join-Path $env:TEMP "platform-tools_latest.zip"
+      $extract = Join-Path $env:TEMP "platform-tools_extracted"
+      try {
+          Invoke-WebRequest -Uri $url -OutFile $zip -UserAgent "PowerShell" -TimeoutSec 30 -ErrorAction Stop
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          $extractedPt = Join-Path $extract "platform-tools"
+          if (Test-Path $extractedPt) {
+              $localAdb = Join-Path $ptDest "adb.exe"
+              $newAdb = Join-Path $extractedPt "adb.exe"
+              $shouldUpdate = $true
+              if (Test-Path $localAdb) {
+                  $localVer = (& $localAdb --version 2>&1) | Out-String
+                  $newVer = (& $newAdb --version 2>&1) | Out-String
+                  if ($localVer -match "Version\s+([0-9\.\-]+)" -and $newVer -match "Version\s+([0-9\.\-]+)") {
+                      if ($Matches[1] -eq $Matches[1]) {
+                          # Compare matched
+                      }
+                  }
+              }
+              & $localAdb kill-server 2>$null | Out-Null
+              if (-not (Test-Path $ptDest)) { New-Item -ItemType Directory -Path $ptDest -Force | Out-Null }
+              Copy-Item "$extractedPt\*" -Destination $ptDest -Recurse -Force
+              $Ansible.Changed = $true
+          }
+          Remove-Item $zip, $extract -Recurse -Force -ErrorAction SilentlyContinue
+      } catch {
+          Write-Warning "Failed to fetch platform-tools: $_"
+      }
+
+- name: Add platform-tools to User PATH
+  ansible.windows.win_path:
+    elements:
+      - "C:\\Users\\{{ ansible_user }}\\Tools\\platform-tools"
+    scope: user
+    state: present
+
+- name: Configure Startup shortcuts
+  ansible.windows.win_shortcut:
+    src: "{{ item.src }}"
+    dest: "C:\\Users\\{{ ansible_user }}\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{{ item.name }}.lnk"
+    directory: "C:\\Users\\{{ ansible_user }}\\Tools"
+  loop:
+    - { name: "WinXCorners", src: "C:\\Users\\{{ ansible_user }}\\Tools\\WinXCorners.exe" }
+    - { name: "mac-kbd-copy-paste", src: "C:\\Users\\{{ ansible_user }}\\Tools\\mac-kbd-copy-paste.exe" }
+
+- name: Clean up legacy volume increment shortcut
+  ansible.windows.win_file:
+    path: "C:\\Users\\{{ ansible_user }}\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\volume-increment_v2new.lnk"
+    state: absent

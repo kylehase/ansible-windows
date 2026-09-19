@@ -1,0 +1,39 @@
+﻿---
+- name: Ensure Debloat working directory exists
+  ansible.windows.win_file:
+    path: "C:\\Temp\\Debloat"
+    state: directory
+
+- name: Copy CustomAppsList for Debloat
+  ansible.windows.win_copy:
+    src: CustomAppsList
+    dest: "C:\\Temp\\Debloat\\CustomAppsList"
+
+- name: Execute Win11Debloat script
+  ansible.windows.win_powershell:
+    script: |
+      $debloatDir = "C:\Temp\Debloat"
+      $debloatScript = Join-Path $debloatDir "Win11Debloat.ps1"
+      
+      try {
+          $onlineScript = Invoke-RestMethod "https://debloat.raphi.re/" -TimeoutSec 15 -ErrorAction Stop
+          Set-Content -Path $debloatScript -Value $onlineScript -Force
+      } catch {
+          Write-Warning "Could not fetch online Win11Debloat: $_"
+      }
+
+      if (Test-Path $debloatScript) {
+          $customApps = Join-Path $debloatDir "CustomAppsList"
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $debloatScript `
+              -DisableTelemetry `
+              -DisableBing `
+              -DisableSuggestions `
+              -DisableLockscreenTips `
+              -RevertContextMenu `
+              -HideTaskbarSearch `
+              -ShowFileExtensions `
+              -DisableCopilot `
+              -RemoveApps `
+              -CustomAppsList $customApps
+          $Ansible.Changed = $true
+      }

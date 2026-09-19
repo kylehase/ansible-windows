@@ -1,0 +1,10 @@
+﻿---
+- name: Setup and Configure Windows Workstation
+  hosts: windows
+  gather_facts: true
+
+  roles:
+    - system_tweaks
+    - debloat
+    - packages
+    - tools

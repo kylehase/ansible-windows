@@ -1,0 +1,48 @@
+﻿---
+- name: Determine packages to install
+  ansible.builtin.set_fact:
+    target_packages: "{{ core_packages + (workstation_packages if install_profile == 'full' else []) }}"
+
+- name: Install software via winget
+  ansible.windows.win_command: >
+    winget install --id {{ item }} -e --accept-source-agreements --accept-package-agreements --silent
+  loop: "{{ target_packages }}"
+  register: winget_result
+  changed_when: "'Successfully installed' in winget_result.stdout"
+  failed_when: false
+
+- name: Check if Audacity was requested
+  ansible.builtin.set_fact:
+    audacity_requested: "{{ 'Audacity.Audacity' in target_packages }}"
+
+- name: Install FFmpeg for Audacity if missing
+  when: audacity_requested
+  block:
+    - name: Check if FFmpeg for Audacity is already installed
+      ansible.windows.win_stat:
+        path: "C:\\Program Files\\FFmpeg for Audacity\\avformat-59.dll"
+      register: ffmpeg_installed
+
+    - name: Download and install FFmpeg for Audacity
+      when: not ffmpeg_installed.stat.exists
+      ansible.windows.win_powershell:
+        script: |
+          $tempInstaller = Join-Path $env:TEMP "FFmpeg_5.0.0_for_Audacity_x86_64.exe"
+          $ffmpegUrl = "https://lame.buanzo.org/FFmpeg_5.0.0_for_Audacity_on_Windows_x86_64.exe"
+          $downloadOk = $false
+          if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
+              & curl.exe -sL -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -H "Referer: https://lame.buanzo.org/ffmpeg.php" -o $tempInstaller $ffmpegUrl
+              if ((Test-Path $tempInstaller) -and ((Get-Item $tempInstaller).Length -gt 1000000)) { $downloadOk = $true }
+          }
+          if (-not $downloadOk) {
+              $wc = New-Object System.Net.WebClient
+              $wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+              $wc.Headers.Add("Referer", "https://lame.buanzo.org/ffmpeg.php")
+              $wc.DownloadFile($ffmpegUrl, $tempInstaller)
+              if ((Test-Path $tempInstaller) -and ((Get-Item $tempInstaller).Length -gt 1000000)) { $downloadOk = $true }
+          }
+          if ($downloadOk) {
+              Start-Process -FilePath $tempInstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+              Remove-Item -Path $tempInstaller -Force -ErrorAction SilentlyContinue
+              $Ansible.Changed = $true
+          }

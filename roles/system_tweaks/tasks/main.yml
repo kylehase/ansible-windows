@@ -1,0 +1,119 @@
+﻿---
+- name: Enable automatic timezone update service
+  ansible.windows.win_regedit:
+    path: HKLM:\SYSTEM\CurrentControlSet\Services\tzautoupdate
+    name: Start
+    data: 3
+    type: dword
+
+- name: Enable and start Windows Time service (W32Time)
+  ansible.windows.win_service:
+    name: W32Time
+    start_mode: auto
+    state: started
+
+- name: Trigger time resynchronization
+  ansible.windows.win_command: w32tm /resync
+  failed_when: false
+
+- name: Configure ISO date and 24-hour time format
+  ansible.windows.win_regedit:
+    path: HKCU:\Control Panel\International
+    name: "{{ item.name }}"
+    data: "{{ item.data }}"
+    type: string
+  loop:
+    - { name: "sShortDate", data: "yyyy-MM-dd" }
+    - { name: "sLongDate", data: "dddd, MMMM d" }
+    - { name: "sShortTime", data: "HH:mm" }
+    - { name: "sTimeFormat", data: "HH:mm:ss" }
+
+- name: Set standard Windows default zip icon
+  ansible.windows.win_regedit:
+    path: "{{ item }}"
+    name: "(Default)"
+    data: "C:\\Windows\\system32\\zipfldr.dll"
+    type: string
+  loop:
+    - Registry::HKEY_CLASSES_ROOT\WinRAR.ZIP\DefaultIcon
+    - Registry::HKEY_CLASSES_ROOT\zipfile\DefaultIcon
+    - HKCU:\Software\Classes\WinRAR.ZIP\DefaultIcon
+    - HKCU:\Software\Classes\zipfile\DefaultIcon
+
+- name: Configure .zip open action to use winrar-extract.vbs
+  ansible.windows.win_regedit:
+    path: "{{ item }}"
+    name: "(Default)"
+    data: 'wscript.exe "%USERPROFILE%\Tools\winrar-extract.vbs" "%1"'
+    type: string
+  loop:
+    - Registry::HKEY_CLASSES_ROOT\WinRAR.ZIP\shell\open\command
+    - Registry::HKEY_CLASSES_ROOT\zipfile\shell\open\command
+    - HKCU:\Software\Classes\WinRAR.ZIP\shell\open\command
+    - HKCU:\Software\Classes\zipfile\shell\open\command
+
+- name: Backup and replace IntegratedServicesRegionPolicySet.json
+  ansible.windows.win_powershell:
+    script: |
+      $target = "C:\Windows\System32\IntegratedServicesRegionPolicySet.json"
+      $backup = "C:\Windows\System32\IntegratedServicesRegionPolicySet.json.bak"
+      if (Test-Path $target) {
+          Takeown /F $target /A | Out-Null
+          icacls $target /grant "Users:(OI)(CI)F" | Out-Null
+          if (-not (Test-Path $backup)) {
+              Copy-Item -Path $target -Destination $backup -Force
+          }
+      }
+  changed_when: false
+
+- name: Deploy custom IntegratedServicesRegionPolicySet.json
+  ansible.windows.win_copy:
+    src: IntegratedServicesRegionPolicySet.json
+    dest: "C:\\Windows\\System32\\IntegratedServicesRegionPolicySet.json"
+    force: true
+
+- name: Deploy Desktop Wallpaper
+  ansible.windows.win_copy:
+    src: "Andor Death Star.png"
+    dest: "C:\\Users\\{{ ansible_user }}\\Pictures\\Andor Death Star.png"
+
+- name: Apply Desktop Wallpaper
+  ansible.windows.win_powershell:
+    script: |
+      $wallPath = "C:\Users\$($env:USERNAME)\Pictures\Andor Death Star.png"
+      if (Test-Path $wallPath) {
+          if (-not ([System.Management.Automation.PSTypeName]'Wallpaper').Type) {
+              Add-Type @"
+              using System;
+              using System.Runtime.InteropServices;
+              public class Wallpaper {
+                  [DllImport("user32.dll", CharSet = CharSet.Auto)]
+                  public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+              }
+"@
+          }
+          [Wallpaper]::SystemParametersInfo(0x0014, 0, $wallPath, 0x0001 -bor 0x0002) | Out-Null
+          $Ansible.Changed = $true
+      }
+
+- name: Create Network Location Shortcuts (This PC)
+  ansible.windows.win_powershell:
+    script: |
+      $netHood = [Environment]::GetFolderPath("NetworkShortcuts")
+      if ($netHood -and (Test-Path $netHood)) {
+          $wsh = New-Object -ComObject WScript.Shell
+          $shares = @{
+              "Public (abyss)"    = "\\abyss\Public"
+              "Media (abyss)"     = "\\abyss\Media"
+              "Downloads (abyss)" = "\\abyss\Downloads"
+          }
+          foreach ($key in $shares.Keys) {
+              $lnk = Join-Path $netHood "$key.lnk"
+              if (-not (Test-Path $lnk)) {
+                  $sc = $wsh.CreateShortcut($lnk)
+                  $sc.TargetPath = $shares[$key]
+                  $sc.Save()
+                  $Ansible.Changed = $true
+              }
+          }
+      }
