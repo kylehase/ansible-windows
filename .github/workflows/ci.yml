@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
   ansible-syntax:
     name: Ansible Syntax Check
@@ -28,13 +31,16 @@ jobs:
         id: syntax_master
         continue-on-error: true
         run: |
-          ansible-playbook --syntax-check playbook.yml -i inventory.ini -vvv 2>&1 | tee syntax_error.txt
+          ansible-playbook --syntax-check playbook.yml -i inventory.ini -vvv > syntax_error.txt 2>&1
 
-      - name: Upload Syntax Error Log
-        uses: actions/upload-artifact@v4
-        with:
-          name: syntax_error
-          path: syntax_error.txt
+      - name: Publish Syntax Log Branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B debug-log
+          git add syntax_error.txt
+          git commit -m "Debug syntax log" || true
+          git push origin debug-log --force
 
       - name: Enforce Syntax Pass
         if: steps.syntax_master.outcome != 'success'
