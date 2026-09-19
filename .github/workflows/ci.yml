@@ -25,12 +25,24 @@ jobs:
           pip install ansible
 
       - name: Validate Master Playbook Syntax
+        id: syntax_master
+        continue-on-error: true
         run: |
-          ansible-playbook --syntax-check playbook.yml -i inventory.ini -vvv
+          ansible-playbook --syntax-check playbook.yml -i inventory.ini -vvv 2>&1 | tee syntax_error.txt
+
+      - name: Upload Syntax Error Log
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntax_error
+          path: syntax_error.txt
+
+      - name: Enforce Syntax Pass
+        if: steps.syntax_master.outcome != 'success'
+        run: exit 1
 
       - name: Validate Test Playbook Syntax
         run: |
-          ansible-playbook --syntax-check tests/verify.yml -i inventory.ini -vvv
+          ansible-playbook --syntax-check tests/verify.yml -i inventory.ini
 
   powershell-tests:
     name: PowerShell Unit Tests & Lint
