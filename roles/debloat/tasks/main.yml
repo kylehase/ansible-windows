@@ -219,20 +219,23 @@
       $apps = $using:AppList
       $changed = $false
 
+      $allProvisioned = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
+      $allInstalled = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue
+
       foreach ($app in $apps) {
-          # Remove provisioned packages (so new profiles never install them)
-          $provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "*$app*" }
-          if ($provisioned) {
-              foreach ($pkg in $provisioned) {
+          # Match and remove provisioned packages (so new profiles never get them)
+          $provMatches = $allProvisioned | Where-Object { $_.DisplayName -like "*$app*" -or $_.PackageName -like "*$app*" }
+          if ($provMatches) {
+              foreach ($pkg in $provMatches) {
                   Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName -ErrorAction SilentlyContinue | Out-Null
                   $changed = $true
               }
           }
 
-          # Remove currently installed packages for all users
-          $installed = Get-AppxPackage -AllUsers -Name "*$app*" -ErrorAction SilentlyContinue
-          if ($installed) {
-              foreach ($pkg in $installed) {
+          # Match and remove currently installed packages for all users
+          $instMatches = $allInstalled | Where-Object { $_.Name -like "*$app*" -or $_.PackageFullName -like "*$app*" }
+          if ($instMatches) {
+              foreach ($pkg in $instMatches) {
                   Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue | Out-Null
                   $changed = $true
               }
