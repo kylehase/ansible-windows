@@ -79,6 +79,11 @@
     dest: "C:\\Windows\\System32\\IntegratedServicesRegionPolicySet.json"
     force: true
 
+- name: Deploy Dell S3422DWG monitor ICC profile
+  ansible.windows.win_copy:
+    src: "DELL S3422DWG-832A0579-2AF9-E14F-D6CF-8306B0B75FE9.icc"
+    dest: "C:\\Windows\\System32\\spool\\drivers\\color\\DELL S3422DWG-832A0579-2AF9-E14F-D6CF-8306B0B75FE9.icc"
+
 - name: Deploy Desktop Wallpaper
   ansible.windows.win_copy:
     src: "Andor Death Star.png"

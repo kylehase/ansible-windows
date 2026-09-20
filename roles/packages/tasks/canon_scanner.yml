@@ -1,0 +1,65 @@
+---
+- name: Install Canon DR-P208II scanner driver and CaptureOnTouch suite
+  ansible.windows.win_powershell:
+    script: |
+      $components = @(
+          @{
+              Name     = "Driver for DR-P208II"
+              Url      = "http://gdlp01.c-wss.com/gds/2/0100010392/05/DR-P208II_Driver_V.1.0.11402.13001_SP6_Windows.zip"
+              SetupRel = "Driver\Setup.exe"
+              TestPath = "C:\Program Files (x86)\Canon Electronics\DRP208II\CsdCore.dll"
+              Desc     = "ISIS/TWAIN Scanner Driver"
+          },
+          @{
+              Name     = "CaptureOnTouch Pro V5"
+              Url      = "http://gdlp01.c-wss.com/gds/0/0200006680/07/CaptureOnTouch_Pro_V5.5.1025.1217.zip"
+              SetupRel = "setup.exe"
+              TestPath = "C:\Program Files (x86)\Canon Electronics\CaptureOnTouch\TouchDR.exe"
+              Desc     = "CaptureOnTouch Pro V5"
+          },
+          @{
+              Name     = "CaptureOnTouch Optional OCR module"
+              Url      = "http://gdlp01.c-wss.com/gds/1/0200006681/01/CaptureOnTouch_Pro_OptionalOCRmodule_Windows.zip"
+              SetupRel = "setup.exe"
+              TestPath = "C:\Program Files\Canon Electronics\CaptureOnTouch\Ocr.zmd"
+              Desc     = "Optional OCR Module"
+          }
+      )
+
+      $changed = $false
+      foreach ($comp in $components) {
+          if (Test-Path $comp.TestPath) {
+              continue
+          }
+
+          Write-Host "Installing $($comp.Desc)..."
+          $cleanName = $comp.Name -replace '[^A-Za-z0-9]', '_'
+          $zip = Join-Path $env:TEMP "$cleanName.zip"
+          $extract = Join-Path $env:TEMP "${cleanName}_extract"
+
+          try {
+              if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
+                  & curl.exe -sL -o $zip $comp.Url
+              } else {
+                  (New-Object System.Net.WebClient).DownloadFile($comp.Url, $zip)
+              }
+
+              if (Test-Path $zip) {
+                  Expand-Archive -Path $zip -DestinationPath $extract -Force
+                  $setup = Join-Path $extract $comp.SetupRel
+                  if (-not (Test-Path $setup)) {
+                      $setup = (Get-ChildItem -Path $extract -Filter "Setup.exe" -Recurse | Select-Object -First 1).FullName
+                  }
+                  if ($setup -and (Test-Path $setup)) {
+                      Start-Process -FilePath $setup -ArgumentList '/s /v"/qn /norestart"' -Wait
+                      $changed = $true
+                  }
+              }
+          } catch {
+              Write-Warning "Failed to install $($comp.Desc): $_"
+          } finally {
+              Remove-Item -Path $zip, $extract -Recurse -Force -ErrorAction SilentlyContinue
+          }
+      }
+
+      $Ansible.Changed = $changed

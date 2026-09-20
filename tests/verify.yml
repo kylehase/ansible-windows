@@ -84,6 +84,33 @@
       register: copilot_stat
       failed_when: not copilot_stat.exists or copilot_stat.value != 1
 
+    - name: "[TEST] Verify Taskbar End Task is enabled"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings
+        name: TaskbarEndTask
+      register: endtask_stat
+      failed_when: not endtask_stat.exists or endtask_stat.value != 1
+
+    - name: "[TEST] Verify AI Recall / Analysis is disabled"
+      ansible.windows.win_reg_stat:
+        path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI
+        name: DisableAIDataAnalysis
+      register: recall_stat
+      failed_when: not recall_stat.exists or recall_stat.value != 1
+
+    - name: "[TEST] Verify Fast Startup is disabled"
+      ansible.windows.win_reg_stat:
+        path: HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power
+        name: HiberbootEnabled
+      register: fastboot_stat
+      failed_when: not fastboot_stat.exists or fastboot_stat.value != 0
+
+    - name: "[TEST] Verify Dell S3422DWG monitor ICC profile exists"
+      ansible.windows.win_stat:
+        path: "C:\\Windows\\System32\\spool\\drivers\\color\\DELL S3422DWG-832A0579-2AF9-E14F-D6CF-8306B0B75FE9.icc"
+      register: icc_stat
+      failed_when: not icc_stat.stat.exists
+
     # ---------------------------------------------------------
     # Tools & Shortcuts Tests
     # ---------------------------------------------------------
