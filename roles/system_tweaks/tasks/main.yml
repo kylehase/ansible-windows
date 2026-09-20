@@ -59,25 +59,43 @@
     - HKCU:\Software\Classes\WinRAR.ZIP\shell\open\command
     - HKCU:\Software\Classes\zipfile\shell\open\command
 
-- name: Backup and replace IntegratedServicesRegionPolicySet.json
+- name: Copy custom IntegratedServicesRegionPolicySet.json to staging
+  ansible.windows.win_copy:
+    src: IntegratedServicesRegionPolicySet.json
+    dest: "C:\\Users\\{{ ansible_user }}\\AppData\\Local\\Temp\\IntegratedServicesRegionPolicySet.json"
+
+- name: Take ownership and deploy IntegratedServicesRegionPolicySet.json to System32
   ansible.windows.win_powershell:
     script: |
+      $staging = "C:\Users\$($env:USERNAME)\AppData\Local\Temp\IntegratedServicesRegionPolicySet.json"
       $target = "C:\Windows\System32\IntegratedServicesRegionPolicySet.json"
       $backup = "C:\Windows\System32\IntegratedServicesRegionPolicySet.json.bak"
+
+      if (-not (Test-Path $staging)) {
+          Write-Error "Staged policy file not found at $staging"
+          return
+      }
+
       if (Test-Path $target) {
-          Takeown /F $target /A | Out-Null
-          icacls $target /grant "Users:(OI)(CI)F" | Out-Null
+          $srcHash = (Get-FileHash -Path $staging -Algorithm SHA256).Hash
+          $tgtHash = (Get-FileHash -Path $target -Algorithm SHA256).Hash
+          if ($srcHash -eq $tgtHash) {
+              $Ansible.Changed = $false
+              Remove-Item $staging -Force -ErrorAction SilentlyContinue
+              return
+          }
+
+          takeown.exe /F $target /A | Out-Null
+          icacls.exe $target /grant "*S-1-5-32-544:F" | Out-Null
+          icacls.exe $target /grant "*S-1-5-32-545:F" | Out-Null
           if (-not (Test-Path $backup)) {
               Copy-Item -Path $target -Destination $backup -Force
           }
       }
-  changed_when: false
 
-- name: Deploy custom IntegratedServicesRegionPolicySet.json
-  ansible.windows.win_copy:
-    src: IntegratedServicesRegionPolicySet.json
-    dest: "C:\\Windows\\System32\\IntegratedServicesRegionPolicySet.json"
-    force: true
+      Copy-Item -Path $staging -Destination $target -Force
+      Remove-Item $staging -Force -ErrorAction SilentlyContinue
+      $Ansible.Changed = $true
 
 - name: Deploy Dell S3422DWG monitor ICC profile
   ansible.windows.win_copy:
