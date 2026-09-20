@@ -1,0 +1,6 @@
+---
+# Touchpad 2-finger scroll direction for Precision Touchpads:
+# 0 = Down motion scrolls up (Traditional Windows)
+# 1 = Down motion scrolls down (Natural / Reverse)
+# Note: Windows 11 UI writes 0 for "Down motion scrolls up" and 4294967295 (0xFFFFFFFF) for "Down motion scrolls down".
+touchpad_scroll_direction: 0

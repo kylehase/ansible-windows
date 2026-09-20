@@ -1,0 +1,3 @@
+---
+# Installation profile options: 'core' or 'full'
+install_profile: "full"

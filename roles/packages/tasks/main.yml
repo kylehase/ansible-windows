@@ -4,12 +4,38 @@
     target_packages: "{{ core_packages + ((install_profile == 'full') | ternary(workstation_packages, [])) }}"
 
 - name: Install software via winget
-  ansible.windows.win_command: >
-    winget install --id {{ item }} -e --accept-source-agreements --accept-package-agreements --silent
+  ansible.windows.win_powershell:
+    script: |
+      $pkg = "{{ item }}"
+      $winget = (Get-Command winget.exe -ErrorAction SilentlyContinue).Source
+      if (-not $winget) {
+          $candidates = @(
+              Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\winget.exe",
+              "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe"
+          )
+          foreach ($c in $candidates) {
+              $found = Resolve-Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($found) { $winget = $found.Path; break }
+          }
+      }
+      if (-not $winget) {
+          Write-Warning "winget.exe not found on target system."
+          return
+      }
+
+      $check = & $winget list --id $pkg --exact --accept-source-agreements 2>&1 | Out-String
+      if ($LASTEXITCODE -eq 0 -and ($check -match [regex]::Escape($pkg))) {
+          $Ansible.Changed = $false
+          return
+      }
+
+      $out = & $winget install --id $pkg -e --accept-source-agreements --accept-package-agreements --silent --disable-interactivity 2>&1 | Out-String
+      if ($out -match "Successfully installed" -or $LASTEXITCODE -eq 0) {
+          $Ansible.Changed = $true
+      } else {
+          Write-Warning "winget install $pkg returned exit code $LASTEXITCODE"
+      }
   loop: "{{ target_packages }}"
-  register: winget_result
-  changed_when: "'Successfully installed' in winget_result.stdout"
-  failed_when: false
 
 - name: Check if Audacity was requested
   ansible.builtin.set_fact:
