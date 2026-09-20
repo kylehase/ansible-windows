@@ -13,9 +13,7 @@
     state: started
 
 - name: Trigger time resynchronization
-  ansible.windows.win_powershell:
-    script: |
-      w32tm /resync
+  ansible.windows.win_command: w32tm /resync
   failed_when: false
 
 - name: Configure ISO date and 24-hour time format
@@ -29,6 +27,13 @@
     - { name: "sLongDate", data: "dddd, MMMM d" }
     - { name: "sShortTime", data: "HH:mm" }
     - { name: "sTimeFormat", data: "HH:mm:ss" }
+
+- name: Configure Touchpad 2-finger scroll direction
+  ansible.windows.win_regedit:
+    path: HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\PrecisionTouchPad
+    name: ScrollDirection
+    data: "{{ touchpad_scroll_direction }}"
+    type: dword
 
 - name: Set standard Windows default zip icon
   ansible.windows.win_regedit:
@@ -113,10 +118,3 @@
               }
           }
       }
-
-- name: Configure Touchpad 2-finger scroll direction
-  ansible.windows.win_regedit:
-    path: HKCU:\Software\Microsoft\Windows\CurrentVersion\PrecisionTouchPad
-    name: ScrollDirection
-    data: "{{ touchpad_scroll_direction }}"
-    type: dword

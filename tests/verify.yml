@@ -34,12 +34,12 @@
       register: time_stat
       failed_when: not time_stat.exists or time_stat.value != "HH:mm"
 
-    - name: "[TEST] Verify Touchpad scroll direction setting in Registry"
+    - name: "[TEST] Verify Touchpad scroll direction is set (Down motion scrolls down)"
       ansible.windows.win_reg_stat:
-        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\PrecisionTouchPad
+        path: HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\PrecisionTouchPad
         name: ScrollDirection
       register: touchpad_stat
-      failed_when: not touchpad_stat.exists
+      failed_when: not touchpad_stat.exists or touchpad_stat.value != 4294967295
 
     # ---------------------------------------------------------
     # Debloat Tests
