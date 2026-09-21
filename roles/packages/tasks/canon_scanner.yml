@@ -4,27 +4,56 @@
     script: |
       $components = @(
           @{
-              Name     = "Driver for DR-P208II"
-              Url      = "http://gdlp01.c-wss.com/gds/2/0100010392/05/DR-P208II_Driver_V.1.0.11402.13001_SP6_Windows.zip"
-              SetupRel = "Driver\Setup.exe"
-              TestPath = "C:\Program Files (x86)\Canon Electronics\DRP208II\CsdCore.dll"
-              Desc     = "ISIS/TWAIN Scanner Driver"
+              Name        = "Driver for DR-P208II"
+              FallbackUrl = "http://gdlp01.c-wss.com/gds/2/0100010392/05/DR-P208II_Driver_V.1.0.11402.13001_SP6_Windows.zip"
+              FileName    = "DR-P208II_Driver_V.1.0.11402.13001_SP6_Windows.zip"
+              SetupRel    = "Driver\Setup.exe"
+              TestPath    = "C:\Program Files (x86)\Canon Electronics\DRP208II\CsdCore.dll"
+              Desc        = "ISIS/TWAIN Scanner Driver"
           },
           @{
-              Name     = "CaptureOnTouch Pro V5"
-              Url      = "http://gdlp01.c-wss.com/gds/0/0200006680/07/CaptureOnTouch_Pro_V5.5.1025.1217.zip"
-              SetupRel = "setup.exe"
-              TestPath = "C:\Program Files (x86)\Canon Electronics\CaptureOnTouch\TouchDR.exe"
-              Desc     = "CaptureOnTouch Pro V5"
+              Name        = "CaptureOnTouch Pro V5"
+              FallbackUrl = "http://gdlp01.c-wss.com/gds/0/0200006680/07/CaptureOnTouch_Pro_V5.5.1025.1217.zip"
+              FileName    = "CaptureOnTouch_Pro_V5.5.1025.1217.zip"
+              SetupRel    = "setup.exe"
+              TestPath    = "C:\Program Files (x86)\Canon Electronics\CaptureOnTouch\TouchDR.exe"
+              Desc        = "CaptureOnTouch Pro V5"
           },
           @{
-              Name     = "CaptureOnTouch Optional OCR module"
-              Url      = "http://gdlp01.c-wss.com/gds/1/0200006681/01/CaptureOnTouch_Pro_OptionalOCRmodule_Windows.zip"
-              SetupRel = "setup.exe"
-              TestPath = "C:\Program Files\Canon Electronics\CaptureOnTouch\Ocr.zmd"
-              Desc     = "Optional OCR Module"
+              Name        = "CaptureOnTouch Optional OCR module"
+              FallbackUrl = "http://gdlp01.c-wss.com/gds/1/0200006681/01/CaptureOnTouch_Pro_OptionalOCRmodule_Windows.zip"
+              FileName    = "CaptureOnTouch_Pro_OptionalOCRmodule_Windows.zip"
+              SetupRel    = "setup.exe"
+              TestPath    = "C:\Program Files\Canon Electronics\CaptureOnTouch\Ocr.zmd"
+              Desc        = "Optional OCR Module"
           }
       )
+
+      # Helper function to dynamically discover the latest download URL from Canon's update CDN manifest
+      function Get-CanonModuleInfo {
+          param([string]$ModuleName, [string]$FallbackUrl, [string]$FallbackFileName)
+          $result = @{
+              Name        = $ModuleName
+              DownloadUrl = $FallbackUrl
+              FileName    = $FallbackFileName
+          }
+          try {
+              $rootUrl = "http://gdlp01.c-wss.com/rmds/g1/cei/autoupdate/windows/root_modulelist.xml"
+              $manifestXml = Invoke-RestMethod -Uri $rootUrl -TimeoutSec 10 -ErrorAction Stop
+              $matchedMod = $manifestXml.ModuleList.Module | Where-Object { $_.Name -eq $ModuleName } | Select-Object -First 1
+              if ($matchedMod -and $matchedMod.DetailUrl) {
+                  $detailXml = Invoke-RestMethod -Uri $matchedMod.DetailUrl -TimeoutSec 10 -ErrorAction Stop
+                  if ($detailXml.Module.DownloadUrl) {
+                      $result.DownloadUrl = $detailXml.Module.DownloadUrl
+                      $result.FileName = [System.IO.Path]::GetFileName($detailXml.Module.DownloadUrl)
+                      $result.Version = $detailXml.Module.Version
+                  }
+              }
+          } catch {
+              Write-Verbose "Could not query Canon live XML manifest ($($_.Exception.Message)). Using fallback URL."
+          }
+          return $result
+      }
 
       $changed = $false
       foreach ($comp in $components) {
@@ -32,16 +61,20 @@
               continue
           }
 
-          Write-Host "Installing $($comp.Desc)..."
-          $cleanName = $comp.Name -replace '[^A-Za-z0-9]', '_'
-          $zip = Join-Path $env:TEMP "$cleanName.zip"
-          $extract = Join-Path $env:TEMP "${cleanName}_extract"
+          Write-Host "Resolving latest package for $($comp.Desc)..."
+          $info = Get-CanonModuleInfo -ModuleName $comp.Name -FallbackUrl $comp.FallbackUrl -FallbackFileName $comp.FileName
+          $downloadUrl = $info.DownloadUrl
+          $targetZipName = $info.FileName
+
+          Write-Host "Installing $($comp.Desc) from $downloadUrl..."
+          $zip = Join-Path $env:TEMP $targetZipName
+          $extract = Join-Path $env:TEMP "Canon_$([System.IO.Path]::GetFileNameWithoutExtension($targetZipName))"
 
           try {
               if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
-                  & curl.exe -sL -o $zip $comp.Url
+                  & curl.exe -sL -o $zip $downloadUrl
               } else {
-                  (New-Object System.Net.WebClient).DownloadFile($comp.Url, $zip)
+                  (New-Object System.Net.WebClient).DownloadFile($downloadUrl, $zip)
               }
 
               if (Test-Path $zip) {
