@@ -112,14 +112,70 @@
   ansible.windows.win_powershell:
     script: |
       $wallPath = "C:\Users\$($env:USERNAME)\Pictures\Andor Death Star.png"
-      if (Test-Path $wallPath) {
-          if (-not ([System.Management.Automation.PSTypeName]'Wallpaper').Type) {
-              $def = 'using System; using System.Runtime.InteropServices; public class Wallpaper { [DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni); }'
-              Add-Type -TypeDefinition $def
-          }
-          [Wallpaper]::SystemParametersInfo(0x0014, 0, $wallPath, 0x0001 -bor 0x0002) | Out-Null
-          $Ansible.Changed = $true
+      if (-not (Test-Path $wallPath)) {
+          $wallPath = "C:\Users\$($env:USERNAME)\Pictures\AndorDeathStar.png"
       }
+      if (-not (Test-Path $wallPath)) {
+          Write-Warning "Wallpaper file not found at $wallPath"
+          $Ansible.Changed = $false
+          return
+      }
+
+      # 1. Update HKCU Control Panel\Desktop Registry values
+      Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name Wallpaper -Value $wallPath -Type String -Force
+      Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name WallpaperStyle -Value "10" -Type String -Force
+      Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name TileWallpaper -Value "0" -Type String -Force
+
+      # 2. Update Explorer BackgroundHistoryPath
+      $historyKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers"
+      if (-not (Test-Path $historyKey)) { New-Item -Path $historyKey -Force | Out-Null }
+      Set-ItemProperty -Path $historyKey -Name "BackgroundHistoryPath0" -Value $wallPath -Type String -Force
+
+      # 3. Directly overwrite TranscodedWallpaper in Themes directory (the cache Windows shell renders)
+      $themesDir = Join-Path $env:APPDATA "Microsoft\Windows\Themes"
+      if (-not (Test-Path $themesDir)) { New-Item -ItemType Directory -Path $themesDir -Force | Out-Null }
+      $transcoded = Join-Path $themesDir "TranscodedWallpaper"
+      Copy-Item -Path $wallPath -Destination $transcoded -Force
+
+      # Clean up CachedFiles so Explorer does not reuse old cached images
+      $cachedDir = Join-Path $themesDir "CachedFiles"
+      if (Test-Path $cachedDir) {
+          Remove-Item -Path "$cachedDir\*" -Force -ErrorAction SilentlyContinue
+      }
+
+      # 4. Invoke Win32 SystemParametersInfo in current session if possible
+      try {
+          if (-not ([System.Management.Automation.PSTypeName]'Win32WallpaperHelper').Type) {
+              $def = 'using System; using System.Runtime.InteropServices; public class Win32WallpaperHelper { [DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni); }'
+              Add-Type -TypeDefinition $def -ErrorAction SilentlyContinue
+          }
+          [Win32WallpaperHelper]::SystemParametersInfo(0x0014, 0, $wallPath, 0x0001 -bor 0x0002) | Out-Null
+      } catch {}
+
+      # 5. Launch an interactive Scheduled Task to cross the Session 0 boundary into the active user desktop
+      try {
+          $taskName = "ApplyWallpaperInteractive"
+          $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -Command `"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class W { [DllImport(\`"user32.dll\`")] public static extern int SystemParametersInfo(int a, int b, string c, int d); }'; [W]::SystemParametersInfo(0x0014, 0, '$wallPath', 3); RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters 1, True`""
+          $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
+          $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 1)
+          Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+          Start-ScheduledTask -TaskName $taskName | Out-Null
+          Start-Sleep -Seconds 2
+          Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+      } catch {}
+
+      # 6. Restart explorer.exe if currently running to force instant visual reload
+      $exp = Get-Process -Name explorer -ErrorAction SilentlyContinue
+      if ($exp) {
+          Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+      }
+
+      # 7. Configure RunOnce to guarantee application upon any fresh interactive logon
+      Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce" -Name "ApplyWallpaper" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command `"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class W { [DllImport(\`"user32.dll\`")] public static extern int SystemParametersInfo(int a, int b, string c, int d); }'; [W]::SystemParametersInfo(0x0014, 0, '$wallPath', 3); RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters 1, True`"" -Force
+
+      $Ansible.Changed = $true
+
 
 - name: Create Network Location Shortcuts (This PC)
   ansible.windows.win_powershell:
