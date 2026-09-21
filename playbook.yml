@@ -3,8 +3,88 @@
   hosts: windows
   gather_facts: false
 
-  roles:
-    - system_tweaks
-    - debloat
-    - packages
-    - tools
+  tasks:
+    - name: Manage workstation provisioning with sleep prevention
+      block:
+        - name: Save original power timeouts and disable sleep/display timeouts
+          ansible.windows.win_powershell:
+            script: |
+              function Get-PowerMinutes($subgroup, $setting) {
+                  $out = powercfg /q SCHEME_CURRENT $subgroup $setting 2>&1 | Out-String
+                  $acMatch = [regex]::Match($out, 'Current AC Power Setting Index:\s+0x([0-9a-fA-F]+)')
+                  $dcMatch = [regex]::Match($out, 'Current DC Power Setting Index:\s+0x([0-9a-fA-F]+)')
+                  $acSec = if ($acMatch.Success) { [Convert]::ToInt32($acMatch.Groups[1].Value, 16) } else { 0 }
+                  $dcSec = if ($dcMatch.Success) { [Convert]::ToInt32($dcMatch.Groups[1].Value, 16) } else { 0 }
+                  if ($acSec -gt 86400) { $acSec = 0 }
+                  if ($dcSec -gt 86400) { $dcSec = 0 }
+                  return @{
+                      AC = [int][Math]::Round($acSec / 60)
+                      DC = [int][Math]::Round($dcSec / 60)
+                  }
+              }
+
+              $stateFile = "C:\Users\$($env:USERNAME)\AppData\Local\Temp\ansible_powercfg_state.json"
+              $standby = Get-PowerMinutes "SUB_SLEEP" "STANDBYIDLE"
+              $hibernate = Get-PowerMinutes "SUB_SLEEP" "HIBERNATEIDLE"
+              $display = Get-PowerMinutes "SUB_VIDEO" "VIDEOIDLE"
+
+              $state = @{
+                  StandbyAC   = $standby.AC
+                  StandbyDC   = $standby.DC
+                  HibernateAC = $hibernate.AC
+                  HibernateDC = $hibernate.DC
+                  DisplayAC   = $display.AC
+                  DisplayDC   = $display.DC
+              }
+
+              $state | ConvertTo-Json | Set-Content -Path $stateFile -Force
+
+              # Keep system active and prevent sleep during automation
+              & powercfg /change monitor-timeout-ac 0
+              & powercfg /change monitor-timeout-dc 0
+              & powercfg /change standby-timeout-ac 0
+              & powercfg /change standby-timeout-dc 0
+              & powercfg /change hibernate-timeout-ac 0
+              & powercfg /change hibernate-timeout-dc 0
+
+              $Ansible.Changed = $true
+
+        - name: Run system tweaks role
+          ansible.builtin.include_role:
+            name: system_tweaks
+
+        - name: Run debloat role
+          ansible.builtin.include_role:
+            name: debloat
+
+        - name: Run packages role
+          ansible.builtin.include_role:
+            name: packages
+
+        - name: Run tools role
+          ansible.builtin.include_role:
+            name: tools
+
+      always:
+        - name: Restore original power and sleep timeouts
+          ansible.windows.win_powershell:
+            script: |
+              $stateFile = "C:\Users\$($env:USERNAME)\AppData\Local\Temp\ansible_powercfg_state.json"
+              if (Test-Path $stateFile) {
+                  try {
+                      $state = Get-Content -Path $stateFile -Raw | ConvertFrom-Json
+                      if ($state) {
+                          & powercfg /change monitor-timeout-ac $state.DisplayAC
+                          & powercfg /change monitor-timeout-dc $state.DisplayDC
+                          & powercfg /change standby-timeout-ac $state.StandbyAC
+                          & powercfg /change standby-timeout-dc $state.StandbyDC
+                          & powercfg /change hibernate-timeout-ac $state.HibernateAC
+                          & powercfg /change hibernate-timeout-dc $state.HibernateDC
+                      }
+                  } finally {
+                      Remove-Item -Path $stateFile -Force -ErrorAction SilentlyContinue
+                  }
+                  $Ansible.Changed = $true
+              } else {
+                  $Ansible.Changed = $false
+              }

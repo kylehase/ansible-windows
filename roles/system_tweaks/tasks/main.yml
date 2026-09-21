@@ -16,13 +16,6 @@
   ansible.windows.win_command: w32tm /resync
   failed_when: false
 
-- name: Prevent system from sleeping while plugged in to AC power
-  ansible.windows.win_command: "{{ item }}"
-  loop:
-    - powercfg /change standby-timeout-ac 0
-    - powercfg /change hibernate-timeout-ac 0
-  changed_when: false
-
 - name: Configure ISO date and 24-hour time format
   ansible.windows.win_regedit:
     path: HKCU:\Control Panel\International
