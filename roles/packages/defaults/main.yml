@@ -1,3 +1,57 @@
 ---
 # Installation profile options: 'core' or 'full'
 install_profile: "full"
+
+# Machine-specific package customizations
+extra_packages: []
+exclude_packages: []
+
+# Feature and hardware toggles
+enable_canon_scanner: false
+
+core_packages:
+  - Microsoft.VCRedist.2015+.x64
+  - Google.Chrome
+  - Mozilla.Firefox
+  - Notepad++.Notepad++
+  - RARLab.WinRAR
+  - DuongDieuPhap.ImageGlass
+  - AntibodySoftware.WizTree
+  - Microsoft.PowerToys
+  - Tailscale.Tailscale
+  - AutoHotkey.AutoHotkey
+  - PDFgear.PDFgear
+  - Balena.Etcher
+  - Devolutions.UniGetUI
+  - Google.JapaneseIME
+
+workstation_packages:
+  - Bitvise.SSH.Client
+  - WinSCP.WinSCP
+  - NextDNS.NextDNS
+  - Apple.Bonjour
+  - Google.GoogleDrive
+  - Oracle.VirtualBox
+  - RedHat.VirtViewer
+  - Git.Git
+  - Docker.DockerDesktop
+  - Google.AndroidStudio
+  - Python.Python.3.14
+  - vim.vim
+  - Google.Antigravity
+  - Google.AntigravityIDE
+  - Jellyfin.JellyfinMediaPlayer
+  - Meltytech.Shotcut
+  - shinchiro.mpv
+  - HandBrake.HandBrake
+  - MoritzBunkus.MKVToolNix
+  - Audacity.Audacity
+  - Tweaking4All.RenameMyTVSeries
+  - Canva.Affinity
+  - darktable.darktable
+  - KDE.digiKam
+  - RawTherapee.RawTherapee
+  - Prusa3D.PrusaSlicer
+  - Dell.DisplayAndPeripheralManager
+  - Logitech.CameraSettings
+  - Lenovo.ServiceBridge

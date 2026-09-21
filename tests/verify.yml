@@ -106,6 +106,7 @@
       failed_when: not fastboot_stat.exists or fastboot_stat.value != 0
 
     - name: "[TEST] Verify Dell S3422DWG monitor ICC profile exists"
+      when: apply_dell_icc_profile | default(false) | bool
       ansible.windows.win_stat:
         path: "C:\\Windows\\System32\\spool\\drivers\\color\\DELL S3422DWG-832A0579-2AF9-E14F-D6CF-8306B0B75FE9.icc"
       register: icc_stat

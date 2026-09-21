@@ -1,0 +1,19 @@
+---
+# ------------------------------------------------------------------------------
+# Host-Specific Configuration: ThinkPad X1 Yoga (Primary Laptop)
+# ------------------------------------------------------------------------------
+
+# Profile: 'core' (minimal) or 'full' (all workstation tools)
+install_profile: "full"
+
+# Hardware / Accessory integrations
+apply_dell_icc_profile: true
+enable_canon_scanner: true
+touchpad_scroll_direction: 4294967295  # Down motion scrolls down
+
+# Package overrides
+# Add additional winget package IDs specific to this laptop:
+extra_packages: []
+
+# Exclude any default packages you do not want installed on this laptop:
+exclude_packages: []

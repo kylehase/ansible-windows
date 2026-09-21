@@ -5,3 +5,7 @@
 # 0 = Down motion scrolls up (Windows default / natural)
 # 4294967295 = Down motion scrolls down (traditional PC style)
 touchpad_scroll_direction: 4294967295
+
+# Dell S3422DWG monitor ICC color profile
+apply_dell_icc_profile: false
+

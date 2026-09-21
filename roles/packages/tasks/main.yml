@@ -1,7 +1,7 @@
 ---
 - name: Determine packages to install
   ansible.builtin.set_fact:
-    target_packages: "{{ core_packages + ((install_profile == 'full') | ternary(workstation_packages, [])) }}"
+    target_packages: "{{ ((core_packages + ((install_profile == 'full') | ternary(workstation_packages, [])) + (extra_packages | default([]))) | difference(exclude_packages | default([]))) | unique }}"
 
 - name: Ensure Microsoft .NET Desktop Runtime is installed for dependent applications
   when: "'HandBrake.HandBrake' in target_packages"
@@ -196,5 +196,5 @@
       $Ansible.Changed = $true
 
 - name: Setup Canon DR-P208II scanner suite
-  when: install_profile == 'full'
+  when: (install_profile == 'full') and (enable_canon_scanner | default(false) | bool)
   ansible.builtin.include_tasks: canon_scanner.yml
