@@ -4,9 +4,9 @@
   gather_facts: false
 
   tasks:
-    - name: Manage workstation provisioning with sleep prevention
+    - name: Manage workstation provisioning with comprehensive sleep prevention
       block:
-        - name: Save original power timeouts and disable sleep/display timeouts
+        - name: Engage keep-awake watchdog and disable sleep modes
           ansible.windows.win_powershell:
             script: |
               function Get-PowerMinutes($subgroup, $setting) {
@@ -20,6 +20,8 @@
                   return @{
                       AC = [int][Math]::Round($acSec / 60)
                       DC = [int][Math]::Round($dcSec / 60)
+                      AC_Raw = $acSec
+                      DC_Raw = $dcSec
                   }
               }
 
@@ -27,25 +29,58 @@
               $standby = Get-PowerMinutes "SUB_SLEEP" "STANDBYIDLE"
               $hibernate = Get-PowerMinutes "SUB_SLEEP" "HIBERNATEIDLE"
               $display = Get-PowerMinutes "SUB_VIDEO" "VIDEOIDLE"
+              $unattended = Get-PowerMinutes "238c9fa8-0aad-41ed-83f4-97be242c8f20" "7bc4a2f9-d8fc-4469-b07b-33eb785aaca0"
+
+              # Check and stop Lenovo Smart Standby if running
+              $lss = Get-Service LenovoSmartStandby -ErrorAction SilentlyContinue
+              $lssRunning = ($lss -and $lss.Status -eq 'Running')
+              if ($lssRunning) {
+                  Stop-Service LenovoSmartStandby -Force -ErrorAction SilentlyContinue
+              }
 
               $state = @{
-                  StandbyAC   = $standby.AC
-                  StandbyDC   = $standby.DC
-                  HibernateAC = $hibernate.AC
-                  HibernateDC = $hibernate.DC
-                  DisplayAC   = $display.AC
-                  DisplayDC   = $display.DC
+                  StandbyAC     = $standby.AC
+                  StandbyDC     = $standby.DC
+                  HibernateAC   = $hibernate.AC
+                  HibernateDC   = $hibernate.DC
+                  DisplayAC     = $display.AC
+                  DisplayDC     = $display.DC
+                  UnattendedAC  = $unattended.AC_Raw
+                  UnattendedDC  = $unattended.DC_Raw
+                  LSSWasRunning = $lssRunning
               }
 
               $state | ConvertTo-Json | Set-Content -Path $stateFile -Force
 
-              # Keep system active and prevent sleep during automation
+              # Configure powercfg to never sleep or timeout
               & powercfg /change monitor-timeout-ac 0
               & powercfg /change monitor-timeout-dc 0
               & powercfg /change standby-timeout-ac 0
               & powercfg /change standby-timeout-dc 0
               & powercfg /change hibernate-timeout-ac 0
               & powercfg /change hibernate-timeout-dc 0
+
+              # Disable unattended sleep timeout (120s default on remote/SSH sessions)
+              & powercfg /setacvalueindex SCHEME_CURRENT 238c9fa8-0aad-41ed-83f4-97be242c8f20 7bc4a2f9-d8fc-4469-b07b-33eb785aaca0 0
+              & powercfg /setdcvalueindex SCHEME_CURRENT 238c9fa8-0aad-41ed-83f4-97be242c8f20 7bc4a2f9-d8fc-4469-b07b-33eb785aaca0 0
+              & powercfg /setactive SCHEME_CURRENT
+
+              # Launch persistent detached background keep-awake process
+              $tokenFile = "C:\Users\$($env:USERNAME)\AppData\Local\Temp\ansible_keepawake.token"
+              $keepAwakeScriptPath = "C:\Users\$($env:USERNAME)\AppData\Local\Temp\ansible_keepawake.ps1"
+              Set-Content -Path $tokenFile -Value "active" -Force
+
+              $lines = @(
+                  'param($token)',
+                  '$def = ''using System; using System.Runtime.InteropServices; public class KeepAwakeHelper { [DllImport("kernel32.dll", SetLastError = true)] public static extern uint SetThreadExecutionState(uint esFlags); }''',
+                  'Add-Type -TypeDefinition $def -ErrorAction SilentlyContinue',
+                  'while (Test-Path $token) {',
+                  '    [KeepAwakeHelper]::SetThreadExecutionState(0x80000043) | Out-Null',
+                  '    Start-Sleep -Seconds 10',
+                  '}'
+              )
+              Set-Content -Path $keepAwakeScriptPath -Value $lines -Force
+              Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$keepAwakeScriptPath`" -token `"$tokenFile`"" -WindowStyle Hidden
 
               $Ansible.Changed = $true
 
@@ -66,9 +101,18 @@
             name: tools
 
       always:
-        - name: Restore original power and sleep timeouts
+        - name: Terminate keep-awake watchdog and restore original power settings
           ansible.windows.win_powershell:
             script: |
+              # Terminate background keep-awake process
+              $tokenFile = "C:\Users\$($env:USERNAME)\AppData\Local\Temp\ansible_keepawake.token"
+              $keepAwakeScriptPath = "C:\Users\$($env:USERNAME)\AppData\Local\Temp\ansible_keepawake.ps1"
+              Remove-Item -Path $tokenFile, $keepAwakeScriptPath -Force -ErrorAction SilentlyContinue
+
+              Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+                  Where-Object { $_.CommandLine -match "ansible_keepawake\.ps1" } |
+                  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
               $stateFile = "C:\Users\$($env:USERNAME)\AppData\Local\Temp\ansible_powercfg_state.json"
               if (Test-Path $stateFile) {
                   try {
@@ -80,6 +124,16 @@
                           & powercfg /change standby-timeout-dc $state.StandbyDC
                           & powercfg /change hibernate-timeout-ac $state.HibernateAC
                           & powercfg /change hibernate-timeout-dc $state.HibernateDC
+
+                          if ($state.UnattendedAC -ne $null) {
+                              & powercfg /setacvalueindex SCHEME_CURRENT 238c9fa8-0aad-41ed-83f4-97be242c8f20 7bc4a2f9-d8fc-4469-b07b-33eb785aaca0 $state.UnattendedAC
+                              & powercfg /setdcvalueindex SCHEME_CURRENT 238c9fa8-0aad-41ed-83f4-97be242c8f20 7bc4a2f9-d8fc-4469-b07b-33eb785aaca0 $state.UnattendedDC
+                              & powercfg /setactive SCHEME_CURRENT
+                          }
+
+                          if ($state.LSSWasRunning) {
+                              Start-Service LenovoSmartStandby -ErrorAction SilentlyContinue
+                          }
                       }
                   } finally {
                       Remove-Item -Path $stateFile -Force -ErrorAction SilentlyContinue
