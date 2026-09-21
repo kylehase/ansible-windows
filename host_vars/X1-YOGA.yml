@@ -34,6 +34,8 @@ exclude_packages:
   - darktable.darktable
   - Apple.Bonjour
   - Google.AndroidStudio
+  - WinSCP.WinSCP
+  - Tweaking4All.RenameMyTVSeries
 
 # Actively uninstall/remove if currently present on X1-YOGA:
 uninstall_packages: []

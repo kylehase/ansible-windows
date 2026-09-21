@@ -228,9 +228,18 @@
 
       # Uninstall via winget if registered
       $winget = (Get-Command winget.exe -ErrorAction SilentlyContinue).Source
-      if (-not $winget) { $winget = "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe" }
+      if (-not $winget) {
+          $candidates = @(
+              Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\winget.exe",
+              "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe"
+          )
+          foreach ($c in $candidates) {
+              $found = Resolve-Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($found) { $winget = $found.Path; break }
+          }
+      }
       if ($winget -and (Test-Path $winget)) {
-          & $winget uninstall --id Microsoft.OneDrive -e --silent --accept-source-agreements 2>$null | Out-Null
+          & $winget uninstall --id Microsoft.OneDrive -e --silent --disable-interactivity --accept-source-agreements 2>$null | Out-Null
       }
 
       # Run native uninstaller
@@ -266,37 +275,95 @@
       $apps = $using:AppList
       $changed = $false
 
-      $allProvisioned = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
-      $currentUserInstalled = Get-AppxPackage -ErrorAction SilentlyContinue
-      $allInstalled = try { Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue } catch { $null }
+      # Discover all user profile SIDs on the system
+      $userSids = @()
+      try {
+          $profiles = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue | Where-Object { -not $_.Special -and $_.SID -like "S-1-5-21-*" }
+          if ($profiles) {
+              $userSids += @($profiles | ForEach-Object { $_.SID })
+          }
+      } catch {}
 
-      foreach ($app in $apps) {
-          # 1. Match and remove currently installed packages for the CURRENT user
-          $userMatches = $currentUserInstalled | Where-Object { $_.Name -like "*$app*" -or $_.PackageFullName -like "*$app*" }
-          if ($userMatches) {
-              foreach ($pkg in $userMatches) {
-                  Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction SilentlyContinue | Out-Null
-                  $changed = $true
+      try {
+          if ($env:USERNAME) {
+              $curSid = (New-Object System.Security.Principal.NTAccount($env:USERNAME)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+              if ($curSid -and ($userSids -notcontains $curSid)) {
+                  $userSids += $curSid
               }
           }
+      } catch {}
 
-          # 2. Match and remove currently installed packages for ALL users
-          if ($allInstalled) {
-              $instMatches = $allInstalled | Where-Object { $_.Name -like "*$app*" -or $_.PackageFullName -like "*$app*" }
-              if ($instMatches) {
-                  foreach ($pkg in $instMatches) {
-                      Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue | Out-Null
-                      $changed = $true
+      $userSids = $userSids | Select-Object -Unique
+
+      # Cache user packages per SID
+      $packagesByUser = @{}
+      foreach ($sid in $userSids) {
+          try {
+              $userPkgs = @(Get-AppxPackage -User $sid -ErrorAction SilentlyContinue)
+              if ($userPkgs -and $userPkgs.Count -gt 0) {
+                  $packagesByUser[$sid] = $userPkgs
+              }
+          } catch {}
+      }
+
+      $currentUserInstalled = @(Get-AppxPackage -ErrorAction SilentlyContinue)
+      $allInstalled = try { @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue) } catch { @() }
+      $allProvisioned = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue)
+
+      foreach ($app in $apps) {
+          # 1. Remove from all discovered user profile SIDs
+          foreach ($sid in $packagesByUser.Keys) {
+              $userMatches = $packagesByUser[$sid] | Where-Object { $_.Name -like "*$app*" -or $_.PackageFullName -like "*$app*" }
+              if ($userMatches) {
+                  foreach ($pkg in $userMatches) {
+                      Write-Host "Removing '$($pkg.PackageFullName)' for SID $sid..."
+                      try {
+                          Remove-AppxPackage -Package $pkg.PackageFullName -User $sid -ErrorAction SilentlyContinue | Out-Null
+                          $changed = $true
+                      } catch {}
                   }
               }
           }
 
-          # 3. Match and remove provisioned packages (so new profiles and updates never get them)
-          $provMatches = $allProvisioned | Where-Object { $_.DisplayName -like "*$app*" -or $_.PackageName -like "*$app*" }
-          if ($provMatches) {
-              foreach ($pkg in $provMatches) {
-                  Remove-AppxProvisionedPackage -Online -PackageName $pkg.PackageName -ErrorAction SilentlyContinue | Out-Null
-                  $changed = $true
+          # 2. Match and remove currently installed packages for the current user context directly
+          if ($currentUserInstalled -and $currentUserInstalled.Count -gt 0) {
+              $curMatches = $currentUserInstalled | Where-Object { $_.Name -like "*$app*" -or $_.PackageFullName -like "*$app*" }
+              if ($curMatches) {
+                  foreach ($pkg in $curMatches) {
+                      Write-Host "Removing '$($pkg.PackageFullName)' for current user..."
+                      try {
+                          Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction SilentlyContinue | Out-Null
+                          $changed = $true
+                      } catch {}
+                  }
+              }
+          }
+
+          # 3. Match and remove currently installed packages for ALL users (if elevation permits)
+          if ($allInstalled -and $allInstalled.Count -gt 0) {
+              $instMatches = $allInstalled | Where-Object { $_.Name -like "*$app*" -or $_.PackageFullName -like "*$app*" }
+              if ($instMatches) {
+                  foreach ($pkg in $instMatches) {
+                      Write-Host "Removing '$($pkg.PackageFullName)' for AllUsers..."
+                      try {
+                          Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue | Out-Null
+                          $changed = $true
+                      } catch {}
+                  }
+              }
+          }
+
+          # 4. Remove provisioned packages with -AllUsers (so new accounts & Windows updates never reinstall)
+          if ($allProvisioned -and $allProvisioned.Count -gt 0) {
+              $provMatches = $allProvisioned | Where-Object { $_.DisplayName -like "*$app*" -or $_.PackageName -like "*$app*" }
+              if ($provMatches) {
+                  foreach ($pkg in $provMatches) {
+                      Write-Host "Removing provisioned package '$($pkg.PackageName)'..."
+                      try {
+                          Remove-AppxProvisionedPackage -Online -AllUsers -PackageName $pkg.PackageName -ErrorAction SilentlyContinue | Out-Null
+                          $changed = $true
+                      } catch {}
+                  }
               }
           }
       }
@@ -307,10 +374,21 @@
   ansible.windows.win_powershell:
     script: |
       $winget = (Get-Command winget.exe -ErrorAction SilentlyContinue).Source
-      if (-not $winget) { $winget = "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe" }
+      if (-not $winget) {
+          $candidates = @(
+              Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\winget.exe",
+              "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe"
+          )
+          foreach ($c in $candidates) {
+              $found = Resolve-Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($found) { $winget = $found.Path; break }
+          }
+      }
       if (-not $winget -or -not (Test-Path $winget)) { return }
 
       $stubbornApps = @(
+          "XP9CXNGPPJ97XX",
+          "XP8BT8DW290MPQ",
           "Microsoft.Teams",
           "Microsoft.OutlookForWindows",
           "Microsoft.Todos",
@@ -320,19 +398,21 @@
           "Microsoft.MicrosoftSolitaireCollection",
           "Microsoft.BingNews",
           "Microsoft.ZuneMusic",
+          "Microsoft.ZuneVideo",
           "Microsoft.Windows.Photos",
           "Microsoft.GamingApp",
-          "Microsoft.XboxApp",
-          "Microsoft.Copilot"
+          "Microsoft.XboxApp"
       )
 
+      $changed = $false
       foreach ($app in $stubbornApps) {
-          $check = & $winget list --id $app --exact --accept-source-agreements 2>&1 | Out-String
+          $check = & $winget list --id $app --accept-source-agreements 2>&1 | Out-String
           if ($LASTEXITCODE -eq 0 -and ($check -match [regex]::Escape($app))) {
               Write-Host "Removing $app via winget..."
-              & $winget uninstall --id $app -e --silent --accept-source-agreements 2>&1 | Out-Null
-              $Ansible.Changed = $true
+              & $winget uninstall --id $app -e --silent --disable-interactivity --accept-source-agreements 2>&1 | Out-Null
+              $changed = $true
           }
       }
+      $Ansible.Changed = $changed
   failed_when: false
 

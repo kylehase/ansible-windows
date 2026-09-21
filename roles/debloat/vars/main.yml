@@ -100,6 +100,7 @@ bloatware_apps:
   - 'Microsoft.WindowsFeedbackHub'
   - 'Microsoft.WindowsMaps'
   - 'Microsoft.WindowsSoundRecorder'
+  - 'Microsoft.SoundRecorder'
   - 'Microsoft.Windows.Photos'
   - 'Microsoft.Photos'
   - 'Microsoft.XboxApp'
