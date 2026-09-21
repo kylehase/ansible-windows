@@ -38,6 +38,7 @@ exclude_packages:
   - Tweaking4All.RenameMyTVSeries
   - Python.Python.3.14
   - Python.Launcher
+  - MoritzBunkus.MKVToolNix
 
 # Actively uninstall/remove if currently present on X1-YOGA:
 uninstall_packages: []
