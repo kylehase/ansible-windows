@@ -8,7 +8,7 @@ install_profile: "full"
 
 # Hardware / Accessory integrations
 apply_dell_icc_profile: false
-enable_canon_scanner: false
+enable_canon_scanner: true
 touchpad_scroll_direction: 4294967295  # Down motion scrolls down
 
 # Package overrides
