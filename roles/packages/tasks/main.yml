@@ -3,6 +3,29 @@
   ansible.builtin.set_fact:
     target_packages: "{{ core_packages + ((install_profile == 'full') | ternary(workstation_packages, [])) }}"
 
+- name: Ensure Microsoft .NET Desktop Runtime is installed for dependent applications
+  when: "'HandBrake.HandBrake' in target_packages"
+  ansible.windows.win_powershell:
+    script: |
+      $desktopDir = "C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App"
+      $hasRuntime = (Test-Path $desktopDir) -and (Get-ChildItem -Path $desktopDir -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "10.*" -or $_.Name -like "8.*" -or $_.Name -like "9.*" })
+      if ($hasRuntime) {
+          $Ansible.Changed = $false
+          return
+      }
+
+      $tempScript = Join-Path $env:TEMP "dotnet-install.ps1"
+      try {
+          Invoke-WebRequest -Uri "https://dot.net/v1/dotnet-install.ps1" -OutFile $tempScript -UseBasicParsing -TimeoutSec 30
+          & $tempScript -Runtime windowsdesktop -Channel 10.0 -InstallDir "C:\Program Files\dotnet"
+          $Ansible.Changed = $true
+      } catch {
+          Write-Warning "Failed to install .NET Desktop Runtime via dotnet-install: $_"
+          $Ansible.Changed = $false
+      } finally {
+          Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+      }
+
 - name: Install software via winget
   ansible.windows.win_powershell:
     script: |
@@ -29,11 +52,35 @@
           return
       }
 
-      $out = & $winget install --id $pkg -e --accept-source-agreements --accept-package-agreements --silent --disable-interactivity 2>&1 | Out-String
-      if ($out -match "Successfully installed" -or $LASTEXITCODE -eq 0) {
-          $Ansible.Changed = $true
-      } else {
-          Write-Warning "winget install $pkg returned exit code $LASTEXITCODE"
+      $stdoutFile = [System.IO.Path]::GetTempFileName()
+      $stderrFile = [System.IO.Path]::GetTempFileName()
+      $timeoutSec = 240
+
+      try {
+          $installArgs = "install --id `"$pkg`" -e --accept-source-agreements --accept-package-agreements --silent --disable-interactivity --skip-dependencies"
+          $p = Start-Process -FilePath $winget -ArgumentList $installArgs -PassThru -NoNewWindow -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
+
+          $sw = [System.Diagnostics.Stopwatch]::StartNew()
+          while (-not $p.HasExited -and $sw.Elapsed.TotalSeconds -lt $timeoutSec) {
+              Start-Sleep -Seconds 2
+          }
+
+          if (-not $p.HasExited) {
+              Write-Warning "Package '$pkg' installation timed out after $timeoutSec seconds. Terminating process tree..."
+              & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+              $Ansible.Changed = $false
+              return
+          }
+
+          $out = Get-Content -Path $stdoutFile, $stderrFile -Raw -ErrorAction SilentlyContinue | Out-String
+          if ($p.ExitCode -eq 0 -or $out -match "Successfully installed") {
+              $Ansible.Changed = $true
+          } else {
+              Write-Warning "winget install $pkg finished with exit code $($p.ExitCode). Output: $out"
+              $Ansible.Changed = $false
+          }
+      } finally {
+          Remove-Item -Path $stdoutFile, $stderrFile -Force -ErrorAction SilentlyContinue
       }
   loop: "{{ target_packages }}"
 
@@ -85,8 +132,27 @@
               $Ansible.Changed = $false
               return
           }
-          & $winget install --id 9WZDNCRFJ4MV -s msstore --accept-source-agreements --accept-package-agreements --silent --disable-interactivity 2>&1 | Out-Null
-          $Ansible.Changed = $true
+
+          $stdoutFile = [System.IO.Path]::GetTempFileName()
+          $stderrFile = [System.IO.Path]::GetTempFileName()
+          $timeoutSec = 300
+
+          try {
+              $p = Start-Process -FilePath $winget -ArgumentList "install --id 9WZDNCRFJ4MV -s msstore --accept-source-agreements --accept-package-agreements --silent --disable-interactivity" -PassThru -NoNewWindow -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
+              $sw = [System.Diagnostics.Stopwatch]::StartNew()
+              while (-not $p.HasExited -and $sw.Elapsed.TotalSeconds -lt $timeoutSec) {
+                  Start-Sleep -Seconds 2
+              }
+              if (-not $p.HasExited) {
+                  Write-Warning "Lenovo Vantage install timed out after $timeoutSec seconds. Terminating..."
+                  & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null
+                  $Ansible.Changed = $false
+              } else {
+                  $Ansible.Changed = $true
+              }
+          } finally {
+              Remove-Item -Path $stdoutFile, $stderrFile -Force -ErrorAction SilentlyContinue
+          }
       }
 
 - name: Configure UniGetUI background auto-updates, pinning, and startup daemon

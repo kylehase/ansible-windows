@@ -51,8 +51,18 @@
                       $setup = (Get-ChildItem -Path $extract -Filter "Setup.exe" -Recurse | Select-Object -First 1).FullName
                   }
                   if ($setup -and (Test-Path $setup)) {
-                      Start-Process -FilePath $setup -ArgumentList '/s /v"/qn /norestart"' -Wait
-                      $changed = $true
+                      $proc = Start-Process -FilePath $setup -ArgumentList '/s /v"/qn /norestart"' -PassThru -NoNewWindow
+                      $timeoutSec = 180
+                      $sw = [System.Diagnostics.Stopwatch]::StartNew()
+                      while (-not $proc.HasExited -and $sw.Elapsed.TotalSeconds -lt $timeoutSec) {
+                          Start-Sleep -Seconds 2
+                      }
+                      if (-not $proc.HasExited) {
+                          Write-Warning "Setup for $($comp.Desc) timed out after $timeoutSec seconds. Terminating..."
+                          & taskkill.exe /PID $proc.Id /T /F 2>&1 | Out-Null
+                      } else {
+                          $changed = $true
+                      }
                   }
               }
           } catch {
