@@ -123,7 +123,7 @@
     - "C:\\Users\\Default\\AppData\\Local\\Microsoft\\Windows\\Shell"
     - "C:\\Users\\{{ ansible_user }}\\AppData\\Local\\Microsoft\\Windows\\Shell"
 
-- name: Unpin Microsoft Edge and Microsoft Store from Taskbar
+- name: Configure desired Taskbar pins and unpin Edge and Store
   ansible.windows.win_powershell:
     script: |
       $def = @'
@@ -152,37 +152,39 @@
           $unpinVerbStr = [ShellStringHelper]::GetString(5387)
       } catch {}
 
-      $targets = @("Microsoft Edge", "Microsoft Store", "Edge", "Store")
+      $unpinTargets = @("Microsoft Edge", "Microsoft Store", "Edge", "Store")
       $changed = $false
 
-      # 1. Check and remove physical pinned shortcut links
       $taskbarDir = Join-Path $env:APPDATA "Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
-      if (Test-Path $taskbarDir) {
-          $links = Get-ChildItem -Path $taskbarDir -Filter "*.lnk" -ErrorAction SilentlyContinue |
-              Where-Object {
-                  $base = $_.BaseName
-                  ($base -like "*Edge*" -or $base -like "*Store*")
-              }
-          foreach ($lnk in $links) {
-              Remove-Item -Path $lnk.FullName -Force -ErrorAction SilentlyContinue
-              $changed = $true
-          }
+      if (-not (Test-Path $taskbarDir)) {
+          New-Item -ItemType Directory -Path $taskbarDir -Force | Out-Null
       }
 
-      # 2. Invoke Shell COM unpin verb if present in the current session
+      # 1. Remove unwanted pinned shortcuts (Edge, Store)
+      $unwantedLinks = Get-ChildItem -Path $taskbarDir -Filter "*.lnk" -ErrorAction SilentlyContinue |
+          Where-Object {
+              $base = $_.BaseName
+              ($base -like "*Edge*" -or $base -like "*Store*")
+          }
+      foreach ($lnk in $unwantedLinks) {
+          Remove-Item -Path $lnk.FullName -Force -ErrorAction SilentlyContinue
+          $changed = $true
+      }
+
+      # 2. Invoke Shell COM unpin verb on any active Edge or Store pins
       $shell = New-Object -ComObject Shell.Application
       $folder = $shell.NameSpace('shell:::{4234d49b-0245-4df3-b780-3893943456e1}')
       if ($folder) {
           foreach ($item in $folder.Items()) {
               $name = $item.Name
-              $matchesTarget = $false
-              foreach ($t in $targets) {
+              $isUnpinTarget = $false
+              foreach ($t in $unpinTargets) {
                   if ($name -like "*$t*") {
-                      $matchesTarget = $true
+                      $isUnpinTarget = $true
                       break
                   }
               }
-              if ($matchesTarget) {
+              if ($isUnpinTarget) {
                   foreach ($verb in $item.Verbs()) {
                       $cleanVerb = ($verb.Name -replace '&', '').Trim()
                       if (($unpinVerbStr -and $verb.Name -eq $unpinVerbStr) -or $cleanVerb -eq 'Unpin from taskbar') {
@@ -195,11 +197,70 @@
           }
       }
 
-      # 3. If running remotely or in Session 0, also launch an interactive task to ensure unpinning in active desktop
-      if ($changed) {
+      # 3. Ensure required shortcuts exist in User Pinned\TaskBar (File Explorer, Chrome, PowerShell)
+      $wsh = New-Object -ComObject WScript.Shell
+      $desiredPins = @(
+          @{
+              Name = "File Explorer.lnk"
+              Sources = @(
+                  Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\File Explorer.lnk",
+                  "C:\Users\Default\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\File Explorer.lnk"
+              )
+              Target = "explorer.exe"
+          },
+          @{
+              Name = "Google Chrome.lnk"
+              Sources = @(
+                  Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
+              )
+              Target = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          },
+          @{
+              Name = "Windows PowerShell.lnk"
+              Sources = @(
+                  Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Windows PowerShell\Windows PowerShell.lnk",
+                  "C:\Users\Default\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Windows PowerShell\Windows PowerShell.lnk"
+              )
+              Target = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+          }
+      )
+
+      $needsTaskbarRefresh = $false
+      foreach ($pin in $desiredPins) {
+          $dest = Join-Path $taskbarDir $pin.Name
+          if (-not (Test-Path $dest)) {
+              $copied = $false
+              foreach ($src in $pin.Sources) {
+                  if (Test-Path $src) {
+                      Copy-Item -Path $src -Destination $dest -Force
+                      $copied = $true
+                      $changed = $true
+                      $needsTaskbarRefresh = $true
+                      break
+                  }
+              }
+              if (-not $copied -and (Test-Path $pin.Target)) {
+                  $sc = $wsh.CreateShortcut($dest)
+                  $sc.TargetPath = $pin.Target
+                  $sc.Save()
+                  $changed = $true
+                  $needsTaskbarRefresh = $true
+              }
+          }
+      }
+
+      # 4. If pins were changed or restored, refresh Taskband and trigger Explorer reload
+      if ($needsTaskbarRefresh -or $changed) {
           try {
-              $taskName = "UnpinTaskbarItemsInteractive"
-              $cmd = '$shell = New-Object -ComObject Shell.Application; $folder = $shell.NameSpace(''shell:::{4234d49b-0245-4df3-b780-3893943456e1}''); if ($folder) { foreach ($item in $folder.Items()) { if ($item.Name -like ''*Edge*'' -or $item.Name -like ''*Store*'') { foreach ($v in $item.Verbs()) { if (($v.Name -replace ''&'','''').Trim() -eq ''Unpin from taskbar'') { $v.DoIt(); break } } } } }'
+              $tbKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband"
+              if (Test-Path $tbKey) {
+                  Remove-ItemProperty -Path $tbKey -Name "Favorites", "FavoritesResolve", "FavoritesChanges", "FavoritesRemovedChanges", "FavoritesVersion" -ErrorAction SilentlyContinue
+              }
+          } catch {}
+
+          try {
+              $taskName = "RefreshTaskbarInteractive"
+              $cmd = 'Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue'
               $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -Command `"$cmd`""
               $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
               $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 1)

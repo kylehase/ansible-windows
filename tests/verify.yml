@@ -138,6 +138,16 @@
       register: layout_stat
       failed_when: not layout_stat.stat.exists
 
+    - name: "[TEST] Verify desired Taskbar pinned shortcuts exist"
+      ansible.windows.win_stat:
+        path: "C:\\Users\\{{ ansible_user }}\\AppData\\Roaming\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar\\{{ item }}"
+      register: pin_stats
+      loop:
+        - "File Explorer.lnk"
+        - "Google Chrome.lnk"
+        - "Windows PowerShell.lnk"
+      failed_when: not pin_stats.stat.exists
+
     - name: "[TEST] Verify Dell S3422DWG monitor ICC profile exists"
       when: apply_dell_icc_profile | default(false) | bool
       ansible.windows.win_stat:
