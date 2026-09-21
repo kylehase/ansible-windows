@@ -277,3 +277,6 @@
       }
   failed_when: false
 
+- name: Clean Desktop icons (keep Recycle Bin and Google Chrome)
+  ansible.builtin.include_tasks: desktop_icons.yml
+

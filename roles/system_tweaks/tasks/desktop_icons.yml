@@ -1,0 +1,90 @@
+---
+- name: Configure Desktop special icons policy (Show Recycle Bin, Hide others)
+  ansible.windows.win_regedit:
+    path: "{{ item.path }}"
+    name: "{{ item.name }}"
+    data: "{{ item.data }}"
+    type: dword
+  loop:
+    # Recycle Bin (0 = Show)
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\NewStartPanel", name: "{645FF040-5081-101B-9F08-00AA002F954E}", data: 0 }
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\ClassicStartMenu", name: "{645FF040-5081-101B-9F08-00AA002F954E}", data: 0 }
+    # This PC (1 = Hide)
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\NewStartPanel", name: "{20D04FE0-3AEA-1069-A2D8-08002B30309D}", data: 1 }
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\ClassicStartMenu", name: "{20D04FE0-3AEA-1069-A2D8-08002B30309D}", data: 1 }
+    # User Files (1 = Hide)
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\NewStartPanel", name: "{59031a47-3f72-44a7-89c5-5595fe6b30ee}", data: 1 }
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\ClassicStartMenu", name: "{59031a47-3f72-44a7-89c5-5595fe6b30ee}", data: 1 }
+    # Network (1 = Hide)
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\NewStartPanel", name: "{F02C1A0D-BE21-4350-88B0-75679416626A}", data: 1 }
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\ClassicStartMenu", name: "{F02C1A0D-BE21-4350-88B0-75679416626A}", data: 1 }
+    # Control Panel (1 = Hide)
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\NewStartPanel", name: "{5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0}", data: 1 }
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\ClassicStartMenu", name: "{5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0}", data: 1 }
+
+- name: Clean Desktop shortcut icons keeping only Chrome
+  ansible.windows.win_powershell:
+    script: |
+      $changed = $false
+      $userDesktop = "C:\Users\{{ ansible_user }}\Desktop"
+      $publicDesktop = "C:\Users\Public\Desktop"
+      $desktopDirs = @($userDesktop, $publicDesktop)
+
+      # 1. Remove all shortcut icons (.lnk, .url) except Google Chrome
+      foreach ($dir in $desktopDirs) {
+          if (Test-Path $dir) {
+              $shortcuts = Get-ChildItem -Path $dir -File -ErrorAction SilentlyContinue |
+                  Where-Object {
+                      $_.Extension -in @(".lnk", ".url") -and ($_.Name -notmatch "Chrome")
+                  }
+              foreach ($sc in $shortcuts) {
+                  Remove-Item -Path $sc.FullName -Force -ErrorAction SilentlyContinue
+                  $changed = $true
+              }
+          }
+      }
+
+      # 2. Ensure Google Chrome desktop shortcut is present
+      $chromeUserLnk = Join-Path $userDesktop "Google Chrome.lnk"
+      $chromePublicLnk = Join-Path $publicDesktop "Google Chrome.lnk"
+      if (-not (Test-Path $chromeUserLnk) -and -not (Test-Path $chromePublicLnk)) {
+          $chromeStart = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
+          $chromeExe = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+          $chromeExe86 = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+          if (Test-Path $chromeStart) {
+              Copy-Item -Path $chromeStart -Destination $chromeUserLnk -Force
+              $changed = $true
+          } elseif (Test-Path $chromeExe) {
+              $wsh = New-Object -ComObject WScript.Shell
+              $sc = $wsh.CreateShortcut($chromeUserLnk)
+              $sc.TargetPath = $chromeExe
+              $sc.Save()
+              $changed = $true
+          } elseif (Test-Path $chromeExe86) {
+              $wsh = New-Object -ComObject WScript.Shell
+              $sc = $wsh.CreateShortcut($chromeUserLnk)
+              $sc.TargetPath = $chromeExe86
+              $sc.Save()
+              $changed = $true
+          }
+      }
+
+      # 3. Notify Windows shell to refresh Desktop icons immediately
+      if ($changed) {
+          try {
+              $def = @'
+              using System;
+              using System.Runtime.InteropServices;
+              public class ShellIconRefresher {
+                  [DllImport("shell32.dll")]
+                  public static extern void SHChangeNotify(int wEventId, int uFlags, IntPtr dwItem1, IntPtr dwItem2);
+              }
+              '@
+              if (-not ([System.Management.Automation.PSTypeName]'ShellIconRefresher').Type) {
+                  Add-Type -TypeDefinition $def -ErrorAction SilentlyContinue
+              }
+              [ShellIconRefresher]::SHChangeNotify(0x8000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
+          } catch {}
+      }
+
+      $Ansible.Changed = $changed

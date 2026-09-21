@@ -101,6 +101,11 @@
           ansible.builtin.include_role:
             name: tools
 
+        - name: Clean Desktop icons post-provisioning
+          ansible.builtin.include_role:
+            name: system_tweaks
+            tasks_from: desktop_icons.yml
+
       always:
         - name: Terminate keep-awake watchdog and restore original power settings
           changed_when: false

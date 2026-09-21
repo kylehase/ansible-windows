@@ -48,6 +48,38 @@
       register: tp_corner_stat
       failed_when: not tp_corner_stat.exists or tp_corner_stat.value != 0
 
+    - name: "[TEST] Verify Desktop Recycle Bin icon is shown"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel
+        name: "{645FF040-5081-101B-9F08-00AA002F954E}"
+      register: rbin_stat
+      failed_when: not rbin_stat.exists or rbin_stat.value != 0
+
+    - name: "[TEST] Verify Desktop This PC icon is hidden"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel
+        name: "{20D04FE0-3AEA-1069-A2D8-08002B30309D}"
+      register: thispc_stat
+      failed_when: not thispc_stat.exists or thispc_stat.value != 1
+
+    - name: "[TEST] Verify only Chrome shortcut remains on Desktop"
+      ansible.windows.win_powershell:
+        script: |
+          $userDesktop = "C:\Users\{{ ansible_user }}\Desktop"
+          $publicDesktop = "C:\Users\Public\Desktop"
+          $dirs = @($userDesktop, $publicDesktop)
+          $badShortcuts = @()
+          foreach ($d in $dirs) {
+              if (Test-Path $d) {
+                  $scs = Get-ChildItem -Path $d -File -ErrorAction SilentlyContinue |
+                      Where-Object { $_.Extension -in @(".lnk", ".url") -and ($_.Name -notmatch "Chrome") }
+                  $badShortcuts += $scs
+              }
+          }
+          if ($badShortcuts.Count -gt 0) {
+              throw "Unwanted desktop shortcuts found: $($badShortcuts.FullName -join ', ')"
+          }
+
     # ---------------------------------------------------------
     # Debloat Tests
     # ---------------------------------------------------------
