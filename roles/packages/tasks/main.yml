@@ -3,6 +3,25 @@
   ansible.builtin.set_fact:
     target_packages: "{{ ((core_packages + ((install_profile == 'full') | ternary(workstation_packages, [])) + (extra_packages | default([]))) | difference(exclude_packages | default([]))) | unique }}"
 
+- name: Uninstall specified packages if present
+  when: (uninstall_packages | default([])) | length > 0
+  ansible.windows.win_powershell:
+    script: |
+      $pkg = "{{ item }}"
+      $winget = (Get-Command winget.exe -ErrorAction SilentlyContinue).Source
+      if (-not $winget) { $winget = "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe" }
+      if (-not $winget -or -not (Test-Path $winget)) { return }
+
+      $check = & $winget list --id $pkg --exact --accept-source-agreements 2>&1 | Out-String
+      if ($LASTEXITCODE -eq 0 -and ($check -match [regex]::Escape($pkg))) {
+          Write-Host "Uninstalling $pkg..."
+          $out = & $winget uninstall --id $pkg -e --silent --disable-interactivity --accept-source-agreements 2>&1 | Out-String
+          $Ansible.Changed = $true
+      } else {
+          $Ansible.Changed = $false
+      }
+  loop: "{{ uninstall_packages | default([]) }}"
+
 - name: Ensure Microsoft .NET Desktop Runtime is installed for dependent applications
   when: "'HandBrake.HandBrake' in target_packages"
   ansible.windows.win_powershell:

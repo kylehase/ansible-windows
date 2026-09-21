@@ -142,3 +142,58 @@
               }
           }
       }
+
+- name: Ensure Tools directory exists
+  when: display_scaling is defined and display_scaling is not none
+  ansible.windows.win_file:
+    path: "C:\\Users\\{{ ansible_user }}\\Tools"
+    state: directory
+
+- name: Deploy SetDpi utility
+  when: display_scaling is defined and display_scaling is not none
+  ansible.windows.win_copy:
+    src: SetDpi.exe
+    dest: "C:\\Users\\{{ ansible_user }}\\Tools\\SetDpi.exe"
+
+- name: Configure Display Scaling registry settings
+  when: display_scaling is defined and display_scaling is not none
+  ansible.windows.win_regedit:
+    path: "{{ item.path }}"
+    name: "{{ item.name }}"
+    data: "{{ item.data }}"
+    type: "{{ item.type }}"
+  loop:
+    - path: HKCU:\Control Panel\Desktop
+      name: LogPixels
+      data: "{{ (display_scaling | int * 96 / 100) | round | int }}"
+      type: dword
+    - path: HKCU:\Control Panel\Desktop
+      name: Win8DpiScaling
+      data: 1
+      type: dword
+    - path: HKCU:\Control Panel\Desktop\PerMonitorSettings
+      name: DpiValue
+      data: 4294967295
+      type: dword
+    - path: HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce
+      name: SetDpiScaling
+      data: '"C:\Users\{{ ansible_user }}\Tools\SetDpi.exe" {{ display_scaling }}'
+      type: string
+
+- name: Apply Display Scaling immediately via SetDpi
+  when: display_scaling is defined and display_scaling is not none
+  ansible.windows.win_powershell:
+    script: |
+      $tool = "C:\Users\$($env:USERNAME)\Tools\SetDpi.exe"
+      $targetScale = [int]"{{ display_scaling }}"
+      if (Test-Path $tool) {
+          $curr = (& $tool value 2>&1) | Out-String
+          if ($curr.Trim() -eq "$targetScale") {
+              $Ansible.Changed = $false
+              return
+          }
+          & $tool $targetScale 2>&1 | Out-String
+          $Ansible.Changed = $true
+      }
+  failed_when: false
+

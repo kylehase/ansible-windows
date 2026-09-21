@@ -5,6 +5,7 @@ install_profile: "full"
 # Machine-specific package customizations
 extra_packages: []
 exclude_packages: []
+uninstall_packages: []
 
 # Feature and hardware toggles
 enable_canon_scanner: false
