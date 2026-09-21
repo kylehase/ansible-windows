@@ -1,5 +1,6 @@
 ---
 core_packages:
+  - Microsoft.VCRedist.2015+.x64
   - Google.Chrome
   - Mozilla.Firefox
   - Notepad++.Notepad++
