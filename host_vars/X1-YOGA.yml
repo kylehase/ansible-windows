@@ -36,6 +36,8 @@ exclude_packages:
   - Google.AndroidStudio
   - WinSCP.WinSCP
   - Tweaking4All.RenameMyTVSeries
+  - Python.Python.3.14
+  - Python.Launcher
 
 # Actively uninstall/remove if currently present on X1-YOGA:
 uninstall_packages: []
