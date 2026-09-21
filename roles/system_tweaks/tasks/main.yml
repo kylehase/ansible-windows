@@ -15,6 +15,7 @@
 - name: Trigger time resynchronization
   ansible.windows.win_command: w32tm /resync
   failed_when: false
+  changed_when: false
 
 - name: Configure ISO date and 24-hour time format
   ansible.windows.win_regedit:
@@ -121,6 +122,22 @@
           return
       }
 
+      # Pre-check: if already configured and cache file matches hash, do nothing
+      $regWall = (Get-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name Wallpaper -ErrorAction SilentlyContinue).Wallpaper
+      $regStyle = (Get-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name WallpaperStyle -ErrorAction SilentlyContinue).WallpaperStyle
+      $themesDir = Join-Path $env:APPDATA "Microsoft\Windows\Themes"
+      $transcoded = Join-Path $themesDir "TranscodedWallpaper"
+
+      $alreadyApplied = ($regWall -eq $wallPath) -and ($regStyle -eq "10")
+      if ($alreadyApplied -and (Test-Path $transcoded)) {
+          $targetHash = (Get-FileHash -Path $wallPath -Algorithm SHA256).Hash
+          $currHash = (Get-FileHash -Path $transcoded -Algorithm SHA256).Hash
+          if ($targetHash -eq $currHash) {
+              $Ansible.Changed = $false
+              return
+          }
+      }
+
       # 1. Update HKCU Control Panel\Desktop Registry values
       Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name Wallpaper -Value $wallPath -Type String -Force
       Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name WallpaperStyle -Value "10" -Type String -Force
@@ -132,9 +149,7 @@
       Set-ItemProperty -Path $historyKey -Name "BackgroundHistoryPath0" -Value $wallPath -Type String -Force
 
       # 3. Directly overwrite TranscodedWallpaper in Themes directory (the cache Windows shell renders)
-      $themesDir = Join-Path $env:APPDATA "Microsoft\Windows\Themes"
       if (-not (Test-Path $themesDir)) { New-Item -ItemType Directory -Path $themesDir -Force | Out-Null }
-      $transcoded = Join-Path $themesDir "TranscodedWallpaper"
       Copy-Item -Path $wallPath -Destination $transcoded -Force
 
       # Clean up CachedFiles so Explorer does not reuse old cached images
@@ -180,6 +195,7 @@
 - name: Create Network Location Shortcuts (This PC)
   ansible.windows.win_powershell:
     script: |
+      $changed = $false
       $netHood = [Environment]::GetFolderPath("NetworkShortcuts")
       if ($netHood -and (Test-Path $netHood)) {
           $wsh = New-Object -ComObject WScript.Shell
@@ -194,10 +210,11 @@
                   $sc = $wsh.CreateShortcut($lnk)
                   $sc.TargetPath = $shares[$key]
                   $sc.Save()
-                  $Ansible.Changed = $true
+                  $changed = $true
               }
           }
       }
+      $Ansible.Changed = $changed
 
 - name: Ensure Tools directory exists
   when: display_scaling is defined and display_scaling is not none

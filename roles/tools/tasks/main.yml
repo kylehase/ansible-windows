@@ -57,9 +57,21 @@
               Expand-Archive -Path $zip -DestinationPath $extract -Force
               $exe = Join-Path $extract "WinXCorners.exe"
               if (Test-Path $exe) {
-                  Stop-Process -Name WinXCorners -Force -ErrorAction SilentlyContinue
-                  Copy-Item -Path $exe -Destination $target -Force
-                  $Ansible.Changed = $true
+                  $shouldUpdate = $true
+                  if (Test-Path $target) {
+                      $tgtHash = (Get-FileHash -Path $target -Algorithm SHA256).Hash
+                      $newHash = (Get-FileHash -Path $exe -Algorithm SHA256).Hash
+                      if ($tgtHash -eq $newHash) {
+                          $shouldUpdate = $false
+                      }
+                  }
+                  if ($shouldUpdate) {
+                      Stop-Process -Name WinXCorners -Force -ErrorAction SilentlyContinue
+                      Copy-Item -Path $exe -Destination $target -Force
+                      $Ansible.Changed = $true
+                  } else {
+                      $Ansible.Changed = $false
+                  }
               }
               Remove-Item $zip, $extract -Recurse -Force -ErrorAction SilentlyContinue
           }
@@ -83,18 +95,20 @@
               $newAdb = Join-Path $extractedPt "adb.exe"
               $shouldUpdate = $true
               if (Test-Path $localAdb) {
-                  $localVer = (& $localAdb --version 2>&1) | Out-String
-                  $newVer = (& $newAdb --version 2>&1) | Out-String
-                  if ($localVer -match "Version\s+([0-9\.\-]+)" -and $newVer -match "Version\s+([0-9\.\-]+)") {
-                      if ($Matches[1] -eq $Matches[1]) {
-                          # Compare matched
-                      }
+                  $localVer = ((& $localAdb --version 2>&1) | Out-String).Trim()
+                  $newVer = ((& $newAdb --version 2>&1) | Out-String).Trim()
+                  if ($localVer -and $newVer -and ($localVer -eq $newVer)) {
+                      $shouldUpdate = $false
                   }
               }
-              & $localAdb kill-server 2>$null | Out-Null
-              if (-not (Test-Path $ptDest)) { New-Item -ItemType Directory -Path $ptDest -Force | Out-Null }
-              Copy-Item "$extractedPt\*" -Destination $ptDest -Recurse -Force
-              $Ansible.Changed = $true
+              if ($shouldUpdate) {
+                  if (Test-Path $localAdb) { & $localAdb kill-server 2>$null | Out-Null }
+                  if (-not (Test-Path $ptDest)) { New-Item -ItemType Directory -Path $ptDest -Force | Out-Null }
+                  Copy-Item "$extractedPt\*" -Destination $ptDest -Recurse -Force
+                  $Ansible.Changed = $true
+              } else {
+                  $Ansible.Changed = $false
+              }
           }
           Remove-Item $zip, $extract -Recurse -Force -ErrorAction SilentlyContinue
       } catch {

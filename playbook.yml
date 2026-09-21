@@ -7,6 +7,7 @@
     - name: Manage workstation provisioning with comprehensive sleep prevention
       block:
         - name: Engage keep-awake watchdog and disable sleep modes
+          changed_when: false
           ansible.windows.win_powershell:
             script: |
               function Get-PowerMinutes($subgroup, $setting) {
@@ -102,6 +103,7 @@
 
       always:
         - name: Terminate keep-awake watchdog and restore original power settings
+          changed_when: false
           ansible.windows.win_powershell:
             script: |
               # Terminate background keep-awake process

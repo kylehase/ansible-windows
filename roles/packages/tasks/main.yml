@@ -250,11 +250,19 @@
   when: "'Devolutions.UniGetUI' in target_packages"
   ansible.windows.win_powershell:
     script: |
+      $changed = $false
       $unigetConfigDir = Join-Path $env:LOCALAPPDATA "UniGetUI\Configuration"
-      if (-not (Test-Path $unigetConfigDir)) { New-Item -ItemType Directory -Path $unigetConfigDir -Force | Out-Null }
-      Set-Content -Path (Join-Path $unigetConfigDir "AutomaticallyUpdatePackages") -Value "" -Force
-      Set-Content -Path (Join-Path $unigetConfigDir "UpdatesCheckInterval") -Value "14400" -Force
-      Set-Content -Path (Join-Path $unigetConfigDir "DoCacheAdminRights") -Value "" -Force
+      if (-not (Test-Path $unigetConfigDir)) { New-Item -ItemType Directory -Path $unigetConfigDir -Force | Out-Null; $changed = $true }
+
+      $autoUp = Join-Path $unigetConfigDir "AutomaticallyUpdatePackages"
+      if (-not (Test-Path $autoUp)) { Set-Content -Path $autoUp -Value "" -Force; $changed = $true }
+
+      $intervalFile = Join-Path $unigetConfigDir "UpdatesCheckInterval"
+      $curInterval = if (Test-Path $intervalFile) { (Get-Content -Path $intervalFile -Raw).Trim() } else { "" }
+      if ($curInterval -ne "14400") { Set-Content -Path $intervalFile -Value "14400" -Force; $changed = $true }
+
+      $cacheAdmin = Join-Path $unigetConfigDir "DoCacheAdminRights"
+      if (-not (Test-Path $cacheAdmin)) { Set-Content -Path $cacheAdmin -Value "" -Force; $changed = $true }
 
       # Ignore self-updating apps
       $ignoredFile = Join-Path $unigetConfigDir "IgnoredPackageUpdates.json"
@@ -265,26 +273,41 @@
               if ($existing) { foreach ($p in $existing.PSObject.Properties) { $ignoredMap[$p.Name] = $p.Value } }
           } catch {}
       }
+      $beforeJson = $ignoredMap | ConvertTo-Json -Depth 5
       foreach ($app in @("winget\Google.Chrome", "winget\Google.ChromeRemoteDesktopHost", "winget\Brave.Brave", "winget\Mozilla.Firefox")) {
           $ignoredMap[$app] = "*"
       }
-      $json = $ignoredMap | ConvertTo-Json -Depth 5
-      Set-Content -Path $ignoredFile -Value $json -Force
-      Set-Content -Path (Join-Path $env:LOCALAPPDATA "UniGetUI\IgnoredPackageUpdates.json") -Value $json -Force
+      $newJson = $ignoredMap | ConvertTo-Json -Depth 5
+      if ($beforeJson -ne $newJson -or -not (Test-Path $ignoredFile)) {
+          Set-Content -Path $ignoredFile -Value $newJson -Force
+          Set-Content -Path (Join-Path $env:LOCALAPPDATA "UniGetUI\IgnoredPackageUpdates.json") -Value $newJson -Force
+          $changed = $true
+      }
 
       # Pin self-updating packages in winget CLI
       $winget = (Get-Command winget.exe -ErrorAction SilentlyContinue).Source
       if (-not $winget) { $winget = "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe" }
-      foreach ($pId in @("Google.Chrome", "Google.ChromeRemoteDesktopHost")) {
-          & $winget pin add --id $pId --blocking --accept-source-agreements 2>$null | Out-Null
+      if ($winget -and (Test-Path $winget)) {
+          $pins = & $winget pin list --accept-source-agreements 2>&1 | Out-String
+          foreach ($pId in @("Google.Chrome", "Google.ChromeRemoteDesktopHost")) {
+              if ($pins -notmatch [regex]::Escape($pId)) {
+                  & $winget pin add --id $pId --blocking --accept-source-agreements 2>$null | Out-Null
+                  $changed = $true
+              }
+          }
       }
 
       # Configure startup daemon
       $unigetExe = Join-Path $env:LOCALAPPDATA "Programs\UniGetUI\UniGetUI.exe"
       if (Test-Path $unigetExe) {
-          Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "UniGetUI" -Value "`"$unigetExe`" --daemon" -Force
+          $curRun = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "UniGetUI" -ErrorAction SilentlyContinue).UniGetUI
+          $targetRun = "`"$unigetExe`" --daemon"
+          if ($curRun -ne $targetRun) {
+              Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "UniGetUI" -Value $targetRun -Force
+              $changed = $true
+          }
       }
-      $Ansible.Changed = $true
+      $Ansible.Changed = $changed
 
 - name: Setup Canon DR-P208II scanner suite
   when: (install_profile == 'full') and (enable_canon_scanner | default(false) | bool)

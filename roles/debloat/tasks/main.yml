@@ -220,13 +220,85 @@
     - XboxNetApiSvc
   failed_when: false
 
+# ---------------------------------------------------------
+# Win11Debloat Tool Execution
+# ---------------------------------------------------------
+- name: Ensure Win11Debloat staging directory exists
+  ansible.windows.win_file:
+    path: "C:\\Temp\\Debloat"
+    state: directory
+
+- name: Deploy Win11Debloat suite archive and configuration
+  ansible.windows.win_copy:
+    src: "{{ item }}"
+    dest: "C:\\Temp\\Debloat\\{{ item }}"
+  loop:
+    - Win11Debloat.zip
+    - CustomDebloatConfig.json
+
+- name: Extract Win11Debloat suite
+  ansible.windows.win_powershell:
+    script: |
+      $zip = "C:\Temp\Debloat\Win11Debloat.zip"
+      $dest = "C:\Temp\Debloat\Win11Debloat"
+      if (-not (Test-Path "$dest\Win11Debloat.ps1")) {
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          $Ansible.Changed = $true
+      } else {
+          $Ansible.Changed = $false
+      }
+
+- name: Execute Win11Debloat app removal for AllUsers
+  ansible.windows.win_powershell:
+    script: |
+      $debloatScript = "C:\Temp\Debloat\Win11Debloat\Win11Debloat.ps1"
+      $cfg = "C:\Temp\Debloat\CustomDebloatConfig.json"
+      & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $debloatScript `
+          -Silent `
+          -CLI `
+          -NoRestartExplorer `
+          -SkipRegistryBackup `
+          -RemoveApps `
+          -Config $cfg `
+          -AppRemovalTarget "AllUsers"
+      $Ansible.Changed = $true
+
+- name: Execute Win11Debloat app removal for target user profile
+  ansible.windows.win_powershell:
+    script: |
+      $debloatScript = "C:\Temp\Debloat\Win11Debloat\Win11Debloat.ps1"
+      $cfg = "C:\Temp\Debloat\CustomDebloatConfig.json"
+      & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $debloatScript `
+          -Silent `
+          -CLI `
+          -NoRestartExplorer `
+          -SkipRegistryBackup `
+          -RemoveApps `
+          -Config $cfg `
+          -AppRemovalTarget "{{ ansible_user }}"
+      $Ansible.Changed = $true
+
 - name: Uninstall Microsoft OneDrive
   ansible.windows.win_powershell:
     script: |
       $proc = Get-Process -Name "OneDrive" -ErrorAction SilentlyContinue
       if ($proc) { Stop-Process -Name "OneDrive" -Force -ErrorAction SilentlyContinue }
 
-      # Uninstall via winget if registered
+      $setupPaths = @(
+          "$env:SYSTEMROOT\SysWOW64\OneDriveSetup.exe",
+          "$env:SYSTEMROOT\System32\OneDriveSetup.exe",
+          "$env:LOCALAPPDATA\Microsoft\OneDrive\Update\OneDriveSetup.exe"
+      )
+      $hasSetup = @($setupPaths | Where-Object { Test-Path $_ })
+      $runKey = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "OneDrive" -ErrorAction SilentlyContinue) -or (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "OneDriveSetup" -ErrorAction SilentlyContinue)
+      $oneDrivePol = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive"
+      $polVal = (Get-ItemProperty -Path $oneDrivePol -Name "DisableFileSyncNGSC" -ErrorAction SilentlyContinue).DisableFileSyncNGSC
+
+      if (-not $proc -and $hasSetup.Count -eq 0 -and -not $runKey -and ($polVal -eq 1)) {
+          $Ansible.Changed = $false
+          return
+      }
+
       $winget = (Get-Command winget.exe -ErrorAction SilentlyContinue).Source
       if (-not $winget) {
           $candidates = @(
@@ -242,177 +314,16 @@
           & $winget uninstall --id Microsoft.OneDrive -e --silent --disable-interactivity --accept-source-agreements 2>$null | Out-Null
       }
 
-      # Run native uninstaller
-      $setupPaths = @(
-          "$env:SYSTEMROOT\SysWOW64\OneDriveSetup.exe",
-          "$env:SYSTEMROOT\System32\OneDriveSetup.exe",
-          "$env:LOCALAPPDATA\Microsoft\OneDrive\Update\OneDriveSetup.exe"
-      )
-      foreach ($setup in $setupPaths) {
-          if (Test-Path $setup) {
-              Start-Process -FilePath $setup -ArgumentList "/uninstall" -Wait -NoNewWindow -ErrorAction SilentlyContinue
-          }
+      foreach ($setup in $hasSetup) {
+          Start-Process -FilePath $setup -ArgumentList "/uninstall" -Wait -NoNewWindow -ErrorAction SilentlyContinue
       }
 
-      # Remove startup keys and prevent reinstallation
       Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "OneDrive" -ErrorAction SilentlyContinue
       Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "OneDriveSetup" -ErrorAction SilentlyContinue
 
-      $oneDrivePol = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive"
       if (-not (Test-Path $oneDrivePol)) { New-Item -Path $oneDrivePol -Force | Out-Null }
       Set-ItemProperty -Path $oneDrivePol -Name "DisableFileSyncNGSC" -Value 1 -Type DWord -Force
 
       $Ansible.Changed = $true
-
-# ---------------------------------------------------------
-# Bloatware App Removal (UWP / Appx)
-# ---------------------------------------------------------
-- name: Remove bloatware Appx and Provisioned packages
-  ansible.windows.win_powershell:
-    parameters:
-      AppList: "{{ bloatware_apps }}"
-    script: |
-      $apps = $using:AppList
-      $changed = $false
-
-      # Discover all user profile SIDs on the system
-      $userSids = @()
-      try {
-          $profiles = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue | Where-Object { -not $_.Special -and $_.SID -like "S-1-5-21-*" }
-          if ($profiles) {
-              $userSids += @($profiles | ForEach-Object { $_.SID })
-          }
-      } catch {}
-
-      try {
-          if ($env:USERNAME) {
-              $curSid = (New-Object System.Security.Principal.NTAccount($env:USERNAME)).Translate([System.Security.Principal.SecurityIdentifier]).Value
-              if ($curSid -and ($userSids -notcontains $curSid)) {
-                  $userSids += $curSid
-              }
-          }
-      } catch {}
-
-      $userSids = $userSids | Select-Object -Unique
-
-      # Cache user packages per SID
-      $packagesByUser = @{}
-      foreach ($sid in $userSids) {
-          try {
-              $userPkgs = @(Get-AppxPackage -User $sid -ErrorAction SilentlyContinue)
-              if ($userPkgs -and $userPkgs.Count -gt 0) {
-                  $packagesByUser[$sid] = $userPkgs
-              }
-          } catch {}
-      }
-
-      $currentUserInstalled = @(Get-AppxPackage -ErrorAction SilentlyContinue)
-      $allInstalled = try { @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue) } catch { @() }
-      $allProvisioned = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue)
-
-      foreach ($app in $apps) {
-          # 1. Remove from all discovered user profile SIDs
-          foreach ($sid in $packagesByUser.Keys) {
-              $userMatches = $packagesByUser[$sid] | Where-Object { $_.Name -like "*$app*" -or $_.PackageFullName -like "*$app*" }
-              if ($userMatches) {
-                  foreach ($pkg in $userMatches) {
-                      Write-Host "Removing '$($pkg.PackageFullName)' for SID $sid..."
-                      try {
-                          Remove-AppxPackage -Package $pkg.PackageFullName -User $sid -ErrorAction SilentlyContinue | Out-Null
-                          $changed = $true
-                      } catch {}
-                  }
-              }
-          }
-
-          # 2. Match and remove currently installed packages for the current user context directly
-          if ($currentUserInstalled -and $currentUserInstalled.Count -gt 0) {
-              $curMatches = $currentUserInstalled | Where-Object { $_.Name -like "*$app*" -or $_.PackageFullName -like "*$app*" }
-              if ($curMatches) {
-                  foreach ($pkg in $curMatches) {
-                      Write-Host "Removing '$($pkg.PackageFullName)' for current user..."
-                      try {
-                          Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction SilentlyContinue | Out-Null
-                          $changed = $true
-                      } catch {}
-                  }
-              }
-          }
-
-          # 3. Match and remove currently installed packages for ALL users (if elevation permits)
-          if ($allInstalled -and $allInstalled.Count -gt 0) {
-              $instMatches = $allInstalled | Where-Object { $_.Name -like "*$app*" -or $_.PackageFullName -like "*$app*" }
-              if ($instMatches) {
-                  foreach ($pkg in $instMatches) {
-                      Write-Host "Removing '$($pkg.PackageFullName)' for AllUsers..."
-                      try {
-                          Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue | Out-Null
-                          $changed = $true
-                      } catch {}
-                  }
-              }
-          }
-
-          # 4. Remove provisioned packages with -AllUsers (so new accounts & Windows updates never reinstall)
-          if ($allProvisioned -and $allProvisioned.Count -gt 0) {
-              $provMatches = $allProvisioned | Where-Object { $_.DisplayName -like "*$app*" -or $_.PackageName -like "*$app*" }
-              if ($provMatches) {
-                  foreach ($pkg in $provMatches) {
-                      Write-Host "Removing provisioned package '$($pkg.PackageName)'..."
-                      try {
-                          Remove-AppxProvisionedPackage -Online -AllUsers -PackageName $pkg.PackageName -ErrorAction SilentlyContinue | Out-Null
-                          $changed = $true
-                      } catch {}
-                  }
-              }
-          }
-      }
-
-      $Ansible.Changed = $changed
-
-- name: Ensure stubborn built-in apps are removed via winget
-  ansible.windows.win_powershell:
-    script: |
-      $winget = (Get-Command winget.exe -ErrorAction SilentlyContinue).Source
-      if (-not $winget) {
-          $candidates = @(
-              Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\winget.exe",
-              "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe"
-          )
-          foreach ($c in $candidates) {
-              $found = Resolve-Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
-              if ($found) { $winget = $found.Path; break }
-          }
-      }
-      if (-not $winget -or -not (Test-Path $winget)) { return }
-
-      $stubbornApps = @(
-          "XP9CXNGPPJ97XX",
-          "XP8BT8DW290MPQ",
-          "Microsoft.Teams",
-          "Microsoft.OutlookForWindows",
-          "Microsoft.Todos",
-          "Clipchamp.Clipchamp",
-          "Microsoft.WindowsFeedbackHub",
-          "Microsoft.WindowsSoundRecorder",
-          "Microsoft.MicrosoftSolitaireCollection",
-          "Microsoft.BingNews",
-          "Microsoft.ZuneMusic",
-          "Microsoft.ZuneVideo",
-          "Microsoft.Windows.Photos",
-          "Microsoft.GamingApp",
-          "Microsoft.XboxApp"
-      )
-
-      $changed = $false
-      foreach ($app in $stubbornApps) {
-          $check = & $winget list --id $app --accept-source-agreements 2>&1 | Out-String
-          if ($LASTEXITCODE -eq 0 -and ($check -match [regex]::Escape($app))) {
-              Write-Host "Removing $app via winget..."
-              & $winget uninstall --id $app -e --silent --disable-interactivity --accept-source-agreements 2>&1 | Out-Null
-              $changed = $true
-          }
-      }
-      $Ansible.Changed = $changed
   failed_when: false
 
