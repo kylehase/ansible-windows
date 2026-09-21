@@ -41,6 +41,13 @@
       register: touchpad_stat
       failed_when: not touchpad_stat.exists or touchpad_stat.value != 4294967295
 
+    - name: "[TEST] Verify Touchpad lower right corner right-click is disabled"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\PrecisionTouchPad
+        name: RightClickZoneEnabled
+      register: tp_corner_stat
+      failed_when: not tp_corner_stat.exists or tp_corner_stat.value != 0
+
     # ---------------------------------------------------------
     # Debloat Tests
     # ---------------------------------------------------------
@@ -104,6 +111,33 @@
         name: HiberbootEnabled
       register: fastboot_stat
       failed_when: not fastboot_stat.exists or fastboot_stat.value != 0
+
+    - name: "[TEST] Verify Taskbar Widgets are disabled in Policy"
+      ansible.windows.win_reg_stat:
+        path: HKLM:\SOFTWARE\Policies\Microsoft\Dsh
+        name: AllowNewsAndInterests
+      register: widget_pol_stat
+      failed_when: not widget_pol_stat.exists or widget_pol_stat.value != 0
+
+    - name: "[TEST] Verify Taskbar Widgets are hidden in User Settings"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+        name: TaskbarDa
+      register: widget_user_stat
+      failed_when: not widget_user_stat.exists or widget_user_stat.value != 0
+
+    - name: "[TEST] Verify Microsoft Store taskbar pinning is disabled in Policy"
+      ansible.windows.win_reg_stat:
+        path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer
+        name: NoPinningStoreToTaskbar
+      register: store_pin_stat
+      failed_when: not store_pin_stat.exists or store_pin_stat.value != 1
+
+    - name: "[TEST] Verify Taskbar LayoutModification template exists"
+      ansible.windows.win_stat:
+        path: "C:\\Users\\Default\\AppData\\Local\\Microsoft\\Windows\\Shell\\LayoutModification.xml"
+      register: layout_stat
+      failed_when: not layout_stat.stat.exists
 
     - name: "[TEST] Verify Dell S3422DWG monitor ICC profile exists"
       when: apply_dell_icc_profile | default(false) | bool

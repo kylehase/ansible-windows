@@ -36,6 +36,13 @@
     data: "{{ touchpad_scroll_direction }}"
     type: dword
 
+- name: Disable touchpad lower right corner right click zone
+  ansible.windows.win_regedit:
+    path: HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\PrecisionTouchPad
+    name: RightClickZoneEnabled
+    data: 0
+    type: dword
+
 - name: Set standard Windows default zip icon
   ansible.windows.win_regedit:
     path: "{{ item }}"

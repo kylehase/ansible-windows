@@ -39,6 +39,131 @@
     data: 0
     type: dword
 
+- name: Disable Taskbar Widgets
+  ansible.windows.win_regedit:
+    path: "{{ item.path }}"
+    name: "{{ item.name }}"
+    data: "{{ item.data }}"
+    type: dword
+  loop:
+    - { path: "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Dsh", name: "AllowNewsAndInterests", data: 0 }
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", name: "TaskbarDa", data: 0 }
+
+- name: Prevent Microsoft Store from pinning to Taskbar
+  ansible.windows.win_regedit:
+    path: "{{ item }}"
+    name: NoPinningStoreToTaskbar
+    data: 1
+    type: dword
+  loop:
+    - HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer
+    - HKCU:\Software\Policies\Microsoft\Windows\Explorer
+
+- name: Ensure Shell directories exist for LayoutModification
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - "C:\\Users\\Default\\AppData\\Local\\Microsoft\\Windows\\Shell"
+    - "C:\\Users\\{{ ansible_user }}\\AppData\\Local\\Microsoft\\Windows\\Shell"
+
+- name: Deploy clean Taskbar LayoutModification template
+  ansible.windows.win_copy:
+    src: LayoutModification.xml
+    dest: "{{ item }}\\LayoutModification.xml"
+  loop:
+    - "C:\\Users\\Default\\AppData\\Local\\Microsoft\\Windows\\Shell"
+    - "C:\\Users\\{{ ansible_user }}\\AppData\\Local\\Microsoft\\Windows\\Shell"
+
+- name: Unpin Microsoft Edge and Microsoft Store from Taskbar
+  ansible.windows.win_powershell:
+    script: |
+      $def = @'
+      using System;
+      using System.Text;
+      using System.Runtime.InteropServices;
+      public class ShellStringHelper {
+          [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+          public static extern IntPtr GetModuleHandle(string lpModuleName);
+          [DllImport("user32.dll", CharSet = CharSet.Auto)]
+          public static extern int LoadString(IntPtr hInstance, uint uID, StringBuilder lpBuffer, int nBufferMax);
+          public static string GetString(uint strId) {
+              IntPtr hModule = GetModuleHandle("shell32.dll");
+              StringBuilder sb = new StringBuilder(256);
+              LoadString(hModule, strId, sb, sb.Capacity);
+              return sb.ToString();
+          }
+      }
+      '@
+      if (-not ([System.Management.Automation.PSTypeName]'ShellStringHelper').Type) {
+          Add-Type -TypeDefinition $def -ErrorAction SilentlyContinue
+      }
+
+      $unpinVerbStr = ""
+      try {
+          $unpinVerbStr = [ShellStringHelper]::GetString(5387)
+      } catch {}
+
+      $targets = @("Microsoft Edge", "Microsoft Store", "Edge", "Store")
+      $changed = $false
+
+      # 1. Check and remove physical pinned shortcut links
+      $taskbarDir = Join-Path $env:APPDATA "Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
+      if (Test-Path $taskbarDir) {
+          $links = Get-ChildItem -Path $taskbarDir -Filter "*.lnk" -ErrorAction SilentlyContinue |
+              Where-Object {
+                  $base = $_.BaseName
+                  ($base -like "*Edge*" -or $base -like "*Store*")
+              }
+          foreach ($lnk in $links) {
+              Remove-Item -Path $lnk.FullName -Force -ErrorAction SilentlyContinue
+              $changed = $true
+          }
+      }
+
+      # 2. Invoke Shell COM unpin verb if present in the current session
+      $shell = New-Object -ComObject Shell.Application
+      $folder = $shell.NameSpace('shell:::{4234d49b-0245-4df3-b780-3893943456e1}')
+      if ($folder) {
+          foreach ($item in $folder.Items()) {
+              $name = $item.Name
+              $matchesTarget = $false
+              foreach ($t in $targets) {
+                  if ($name -like "*$t*") {
+                      $matchesTarget = $true
+                      break
+                  }
+              }
+              if ($matchesTarget) {
+                  foreach ($verb in $item.Verbs()) {
+                      $cleanVerb = ($verb.Name -replace '&', '').Trim()
+                      if (($unpinVerbStr -and $verb.Name -eq $unpinVerbStr) -or $cleanVerb -eq 'Unpin from taskbar') {
+                          $verb.DoIt()
+                          $changed = $true
+                          break
+                      }
+                  }
+              }
+          }
+      }
+
+      # 3. If running remotely or in Session 0, also launch an interactive task to ensure unpinning in active desktop
+      if ($changed) {
+          try {
+              $taskName = "UnpinTaskbarItemsInteractive"
+              $cmd = '$shell = New-Object -ComObject Shell.Application; $folder = $shell.NameSpace(''shell:::{4234d49b-0245-4df3-b780-3893943456e1}''); if ($folder) { foreach ($item in $folder.Items()) { if ($item.Name -like ''*Edge*'' -or $item.Name -like ''*Store*'') { foreach ($v in $item.Verbs()) { if (($v.Name -replace ''&'','''').Trim() -eq ''Unpin from taskbar'') { $v.DoIt(); break } } } } }'
+              $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -Command `"$cmd`""
+              $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
+              $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 1)
+              Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+              Start-ScheduledTask -TaskName $taskName | Out-Null
+              Start-Sleep -Seconds 2
+              Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+          } catch {}
+      }
+
+      $Ansible.Changed = $changed
+
 - name: Disable Lockscreen tips and advertisements
   ansible.windows.win_regedit:
     path: HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
