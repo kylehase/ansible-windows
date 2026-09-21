@@ -235,6 +235,7 @@
   loop:
     - Win11Debloat.zip
     - CustomDebloatConfig.json
+    - Win11DebloatConfig.json
 
 - name: Extract Win11Debloat suite
   ansible.windows.win_powershell:
@@ -251,32 +252,72 @@
 - name: Execute Win11Debloat app removal for AllUsers
   ansible.windows.win_powershell:
     script: |
+      $cfgPath = "C:\Temp\Debloat\CustomDebloatConfig.json"
+      $cfgJson = Get-Content $cfgPath -Raw | ConvertFrom-Json
+      $patterns = @($cfgJson.Apps)
+
+      $hasProv = $false
+      try {
+          $allProv = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue)
+          foreach ($pkg in $allProv) {
+              foreach ($pat in $patterns) {
+                  if ($pkg.PackageName -like "*$pat*") {
+                      $hasProv = $true
+                      break
+                  }
+              }
+              if ($hasProv) { break }
+          }
+      } catch {
+          $hasProv = $true
+      }
+
       $debloatScript = "C:\Temp\Debloat\Win11Debloat\Win11Debloat.ps1"
-      $cfg = "C:\Temp\Debloat\CustomDebloatConfig.json"
       & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $debloatScript `
           -Silent `
           -CLI `
           -NoRestartExplorer `
           -SkipRegistryBackup `
           -RemoveApps `
-          -Config $cfg `
+          -Config $cfgPath `
           -AppRemovalTarget "AllUsers"
-      $Ansible.Changed = $true
+      $Ansible.Changed = $hasProv
 
 - name: Execute Win11Debloat app removal for target user profile
   ansible.windows.win_powershell:
     script: |
+      $cfgPath = "C:\Temp\Debloat\CustomDebloatConfig.json"
+      $cfgJson = Get-Content $cfgPath -Raw | ConvertFrom-Json
+      $patterns = @($cfgJson.Apps)
+
+      $hasUserPkgs = $false
+      try {
+          $userAccount = New-Object System.Security.Principal.NTAccount("{{ ansible_user }}")
+          $userSid = $userAccount.Translate([System.Security.Principal.SecurityIdentifier]).Value
+          $allUserPkgs = @(Get-AppxPackage -User $userSid -ErrorAction SilentlyContinue)
+          foreach ($pkg in $allUserPkgs) {
+              foreach ($pat in $patterns) {
+                  if ($pkg.Name -like "*$pat*") {
+                      $hasUserPkgs = $true
+                      break
+                  }
+              }
+              if ($hasUserPkgs) { break }
+          }
+      } catch {
+          $hasUserPkgs = $true
+      }
+
       $debloatScript = "C:\Temp\Debloat\Win11Debloat\Win11Debloat.ps1"
-      $cfg = "C:\Temp\Debloat\CustomDebloatConfig.json"
       & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $debloatScript `
           -Silent `
           -CLI `
           -NoRestartExplorer `
           -SkipRegistryBackup `
           -RemoveApps `
-          -Config $cfg `
+          -Config $cfgPath `
           -AppRemovalTarget "{{ ansible_user }}"
-      $Ansible.Changed = $true
+      $Ansible.Changed = $hasUserPkgs
 
 - name: Uninstall Microsoft OneDrive
   ansible.windows.win_powershell:

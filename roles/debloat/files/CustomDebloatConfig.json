@@ -1,29 +1,28 @@
 {
   "Version": "1.0",
   "Apps": [
-    "Microsoft.GamingApp",
-    "Microsoft.XboxApp",
-    "Microsoft.XboxGameOverlay",
-    "Microsoft.XboxGamingOverlay",
-    "Microsoft.XboxIdentityProvider",
-    "Microsoft.XboxSpeechToTextOverlay",
-    "Microsoft.Xbox.TCUI",
-    "Microsoft.MicrosoftSolitaireCollection",
-    "Microsoft.WindowsSoundRecorder",
-    "Microsoft.OutlookForWindows",
-    "Microsoft.Todos",
-    "MicrosoftTeams",
-    "MSTeams",
-    "Microsoft.BingNews",
-    "Clipchamp.Clipchamp",
-    "XP9CXNGPPJ97XX",
-    "Microsoft.ZuneMusic",
-    "Microsoft.ZuneVideo",
-    "Microsoft.WindowsFeedbackHub",
-    "Microsoft.Windows.Photos",
-    "Microsoft.OneDrive",
     "4DF9E0F8.Netflix",
     "ACGMediaPlayer",
+    "AD2F1837.HPAIExperienceCenter",
+    "AD2F1837.HPConnectedMusic",
+    "AD2F1837.HPConnectedPhotopoweredbySnapfish",
+    "AD2F1837.HPDesktopSupportUtilities",
+    "AD2F1837.HPEasyClean",
+    "AD2F1837.HPFileViewer",
+    "AD2F1837.HPJumpStarts",
+    "AD2F1837.HPPCHardwareDiagnosticsWindows",
+    "AD2F1837.HPPowerManager",
+    "AD2F1837.HPPrinterControl",
+    "AD2F1837.HPPrivacySettings",
+    "AD2F1837.HPQuickDrop",
+    "AD2F1837.HPQuickTouch",
+    "AD2F1837.HPRegistration",
+    "AD2F1837.HPSupportAssistant",
+    "AD2F1837.HPSureShieldAI",
+    "AD2F1837.HPSystemInformation",
+    "AD2F1837.HPWelcome",
+    "AD2F1837.HPWorkWell",
+    "AD2F1837.myHP",
     "ActiproSoftwareLLC",
     "AdobeSystemsIncorporated.AdobePhotoshopExpress",
     "Amazon.com.Amazon",
@@ -31,8 +30,9 @@
     "Asphalt8Airborne",
     "AutodeskSketchBook",
     "BytedancePte.Ltd.TikTok",
-    "CaesarsSlotsFreeCasino",
     "COOKINGFEVER",
+    "CaesarsSlotsFreeCasino",
+    "Clipchamp.Clipchamp",
     "CyberLinkMediaSuiteEssentials",
     "DellInc.DellDigitalDelivery",
     "DellInc.DellMobileConnect",
@@ -45,27 +45,27 @@
     "FACEBOOK.FACEBOOK",
     "Facebook.Instagram",
     "FarmVille2CountryEscape",
-    "flaregamesGmbH.RoyalRevolt",
     "Flipboard",
-    "HiddenCity",
     "HULULLC.HULUPLUS",
-    "iHeartRadio",
-    "king.com.BubbleWitch3Saga",
-    "king.com.CandyCrushSaga",
-    "king.com.CandyCrushSodaSaga",
+    "HiddenCity",
     "LGElectronics.LGMonitorApp",
     "LinkedInforWindows",
+    "MSTeams",
     "MarchofEmpires",
+    "Microsoft.365Copilot",
     "Microsoft.3DBuilder",
     "Microsoft.549981C3F5F10",
     "Microsoft.BingFinance",
     "Microsoft.BingFoodAndDrink",
     "Microsoft.BingHealthAndFitness",
+    "Microsoft.BingNews",
     "Microsoft.BingSearch",
     "Microsoft.BingSports",
     "Microsoft.BingTranslator",
     "Microsoft.BingTravel",
     "Microsoft.BingWeather",
+    "Microsoft.Copilot",
+    "Microsoft.GamingApp",
     "Microsoft.Getstarted",
     "Microsoft.M365Companions",
     "Microsoft.Messaging",
@@ -73,6 +73,7 @@
     "Microsoft.MicrosoftJournal",
     "Microsoft.MicrosoftOfficeHub",
     "Microsoft.MicrosoftPowerBIForWindows",
+    "Microsoft.MicrosoftSolitaireCollection",
     "Microsoft.MicrosoftStickyNotes",
     "Microsoft.MixedReality.Portal",
     "Microsoft.NetworkSpeedTest",
@@ -80,21 +81,40 @@
     "Microsoft.Office.OneNote",
     "Microsoft.Office.Sway",
     "Microsoft.OneConnect",
+    "Microsoft.OneDrive",
+    "Microsoft.OutlookForWindows",
     "Microsoft.PCManager",
+    "Microsoft.Photos",
     "Microsoft.PowerAutomateDesktop",
     "Microsoft.Print3D",
     "Microsoft.SkypeApp",
+    "Microsoft.SoundRecorder",
     "Microsoft.StartExperiencesApp",
+    "Microsoft.Teams",
+    "Microsoft.Todos",
     "Microsoft.Whiteboard",
     "Microsoft.WidgetsPlatformRuntime",
     "Microsoft.Windows.AIHub",
+    "Microsoft.Windows.Ai.Copilot.Provider",
     "Microsoft.Windows.DevHome",
+    "Microsoft.Windows.Photos",
     "Microsoft.WindowsAlarms",
     "Microsoft.WindowsCalculator",
-    "Microsoft.windowscommunicationsapps",
+    "Microsoft.WindowsFeedbackHub",
     "Microsoft.WindowsMaps",
+    "Microsoft.WindowsSoundRecorder",
+    "Microsoft.Xbox.TCUI",
+    "Microsoft.XboxApp",
+    "Microsoft.XboxGameOverlay",
+    "Microsoft.XboxGamingOverlay",
+    "Microsoft.XboxIdentityProvider",
+    "Microsoft.XboxSpeechToTextOverlay",
+    "Microsoft.ZuneMusic",
+    "Microsoft.ZuneVideo",
+    "Microsoft.windowscommunicationsapps",
     "MicrosoftCorporationII.MicrosoftFamily",
     "MicrosoftCorporationII.QuickAssist",
+    "MicrosoftTeams",
     "NYTCrossword",
     "OneCalendar",
     "PandoraMediaInc",
@@ -105,6 +125,202 @@
     "SlingTV",
     "SpotifyAB.SpotifyMusic",
     "TuneInRadio",
-    "WinZipUniversal"
+    "WinZipUniversal",
+    "XP9CXNGPPJ97XX",
+    "flaregamesGmbH.RoyalRevolt",
+    "iHeartRadio",
+    "king.com.BubbleWitch3Saga",
+    "king.com.CandyCrushSaga",
+    "king.com.CandyCrushSodaSaga"
+  ],
+  "Tweaks": [
+    {
+      "Name": "DisableEdgeAI",
+      "Value": true
+    },
+    {
+      "Name": "DisableClickToDo",
+      "Value": true
+    },
+    {
+      "Name": "DisableNotepadAI",
+      "Value": true
+    },
+    {
+      "Name": "DisableDesktopSpotlight",
+      "Value": true
+    },
+    {
+      "Name": "DisableDVR",
+      "Value": true
+    },
+    {
+      "Name": "DisablePaintAI",
+      "Value": true
+    },
+    {
+      "Name": "DisableFindMyDevice",
+      "Value": true
+    },
+    {
+      "Name": "PreventUpdateAutoReboot",
+      "Value": true
+    },
+    {
+      "Name": "DisableDeliveryOptimization",
+      "Value": true
+    },
+    {
+      "Name": "HideDupliDrive",
+      "Value": true
+    },
+    {
+      "Name": "DisableGameBarIntegration",
+      "Value": true
+    },
+    {
+      "Name": "EnableEndTask",
+      "Value": true
+    },
+    {
+      "Name": "DisableEdgeAds",
+      "Value": true
+    },
+    {
+      "Name": "DisableSuggestions",
+      "Value": true
+    },
+    {
+      "Name": "DisableSettings365Ads",
+      "Value": true
+    },
+    {
+      "Name": "DisableFastStartup",
+      "Value": true
+    },
+    {
+      "Name": "DisableRecall",
+      "Value": true
+    },
+    {
+      "Name": "AddFoldersToThisPC",
+      "Value": true
+    },
+    {
+      "Name": "HideOnedrive",
+      "Value": true
+    },
+    {
+      "Name": "DisableStoreSearchSuggestions",
+      "Value": true
+    }
+  ],
+  "Deployment": [
+    {
+      "Name": "CreateRestorePoint",
+      "Value": false
+    },
+    {
+      "Name": "SkipRegistryBackup",
+      "Value": true
+    },
+    {
+      "Name": "RestartExplorer",
+      "Value": false
+    }
+  ],
+  "Settings": [
+    {
+      "Name": "RemoveApps",
+      "Value": true
+    },
+    {
+      "Name": "Apps",
+      "Value": "4DF9E0F8.Netflix,ACGMediaPlayer,AD2F1837.HPAIExperienceCenter,AD2F1837.HPConnectedMusic,AD2F1837.HPConnectedPhotopoweredbySnapfish,AD2F1837.HPDesktopSupportUtilities,AD2F1837.HPEasyClean,AD2F1837.HPFileViewer,AD2F1837.HPJumpStarts,AD2F1837.HPPCHardwareDiagnosticsWindows,AD2F1837.HPPowerManager,AD2F1837.HPPrinterControl,AD2F1837.HPPrivacySettings,AD2F1837.HPQuickDrop,AD2F1837.HPQuickTouch,AD2F1837.HPRegistration,AD2F1837.HPSupportAssistant,AD2F1837.HPSureShieldAI,AD2F1837.HPSystemInformation,AD2F1837.HPWelcome,AD2F1837.HPWorkWell,AD2F1837.myHP,ActiproSoftwareLLC,AdobeSystemsIncorporated.AdobePhotoshopExpress,Amazon.com.Amazon,AmazonVideo.PrimeVideo,Asphalt8Airborne,AutodeskSketchBook,BytedancePte.Ltd.TikTok,COOKINGFEVER,CaesarsSlotsFreeCasino,Clipchamp.Clipchamp,CyberLinkMediaSuiteEssentials,DellInc.DellDigitalDelivery,DellInc.DellMobileConnect,DellInc.DellSupportAssistforPCs,Disney.37853FC22B2CE,DisneyMagicKingdoms,DrawboardPDF,Duolingo-LearnLanguagesforFree,EclipseManager,FACEBOOK.FACEBOOK,Facebook.Instagram,FarmVille2CountryEscape,Flipboard,HULULLC.HULUPLUS,HiddenCity,LGElectronics.LGMonitorApp,LinkedInforWindows,MSTeams,MarchofEmpires,Microsoft.365Copilot,Microsoft.3DBuilder,Microsoft.549981C3F5F10,Microsoft.BingFinance,Microsoft.BingFoodAndDrink,Microsoft.BingHealthAndFitness,Microsoft.BingNews,Microsoft.BingSearch,Microsoft.BingSports,Microsoft.BingTranslator,Microsoft.BingTravel,Microsoft.BingWeather,Microsoft.Copilot,Microsoft.GamingApp,Microsoft.Getstarted,Microsoft.M365Companions,Microsoft.Messaging,Microsoft.Microsoft3DViewer,Microsoft.MicrosoftJournal,Microsoft.MicrosoftOfficeHub,Microsoft.MicrosoftPowerBIForWindows,Microsoft.MicrosoftSolitaireCollection,Microsoft.MicrosoftStickyNotes,Microsoft.MixedReality.Portal,Microsoft.NetworkSpeedTest,Microsoft.News,Microsoft.Office.OneNote,Microsoft.Office.Sway,Microsoft.OneConnect,Microsoft.OneDrive,Microsoft.OutlookForWindows,Microsoft.PCManager,Microsoft.Photos,Microsoft.PowerAutomateDesktop,Microsoft.Print3D,Microsoft.SkypeApp,Microsoft.SoundRecorder,Microsoft.StartExperiencesApp,Microsoft.Teams,Microsoft.Todos,Microsoft.Whiteboard,Microsoft.WidgetsPlatformRuntime,Microsoft.Windows.AIHub,Microsoft.Windows.Ai.Copilot.Provider,Microsoft.Windows.DevHome,Microsoft.Windows.Photos,Microsoft.WindowsAlarms,Microsoft.WindowsCalculator,Microsoft.WindowsFeedbackHub,Microsoft.WindowsMaps,Microsoft.WindowsSoundRecorder,Microsoft.Xbox.TCUI,Microsoft.XboxApp,Microsoft.XboxGameOverlay,Microsoft.XboxGamingOverlay,Microsoft.XboxIdentityProvider,Microsoft.XboxSpeechToTextOverlay,Microsoft.ZuneMusic,Microsoft.ZuneVideo,Microsoft.windowscommunicationsapps,MicrosoftCorporationII.MicrosoftFamily,MicrosoftCorporationII.QuickAssist,MicrosoftTeams,NYTCrossword,OneCalendar,PandoraMediaInc,PhototasticCollage,PicsArt-PhotoStudio,PolarrPhotoEditorAcademicEdition,Sidia.LiveWallpaper,SlingTV,SpotifyAB.SpotifyMusic,TuneInRadio,WinZipUniversal,XP9CXNGPPJ97XX,flaregamesGmbH.RoyalRevolt,iHeartRadio,king.com.BubbleWitch3Saga,king.com.CandyCrushSaga,king.com.CandyCrushSodaSaga"
+    },
+    {
+      "Name": "DisableEdgeAI",
+      "Value": true
+    },
+    {
+      "Name": "DisableClickToDo",
+      "Value": true
+    },
+    {
+      "Name": "DisableNotepadAI",
+      "Value": true
+    },
+    {
+      "Name": "DisableDesktopSpotlight",
+      "Value": true
+    },
+    {
+      "Name": "DisableDVR",
+      "Value": true
+    },
+    {
+      "Name": "DisablePaintAI",
+      "Value": true
+    },
+    {
+      "Name": "DisableFindMyDevice",
+      "Value": true
+    },
+    {
+      "Name": "PreventUpdateAutoReboot",
+      "Value": true
+    },
+    {
+      "Name": "DisableDeliveryOptimization",
+      "Value": true
+    },
+    {
+      "Name": "HideDupliDrive",
+      "Value": true
+    },
+    {
+      "Name": "DisableGameBarIntegration",
+      "Value": true
+    },
+    {
+      "Name": "EnableEndTask",
+      "Value": true
+    },
+    {
+      "Name": "DisableEdgeAds",
+      "Value": true
+    },
+    {
+      "Name": "DisableSuggestions",
+      "Value": true
+    },
+    {
+      "Name": "DisableSettings365Ads",
+      "Value": true
+    },
+    {
+      "Name": "DisableFastStartup",
+      "Value": true
+    },
+    {
+      "Name": "CreateRestorePoint",
+      "Value": true
+    },
+    {
+      "Name": "DisableRecall",
+      "Value": true
+    },
+    {
+      "Name": "AddFoldersToThisPC",
+      "Value": true
+    },
+    {
+      "Name": "HideOnedrive",
+      "Value": true
+    },
+    {
+      "Name": "DisableStoreSearchSuggestions",
+      "Value": true
+    }
   ]
 }
