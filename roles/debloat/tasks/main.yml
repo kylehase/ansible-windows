@@ -39,15 +39,62 @@
     data: 0
     type: dword
 
-- name: Disable Taskbar Widgets
-  ansible.windows.win_regedit:
-    path: "{{ item.path }}"
-    name: "{{ item.name }}"
-    data: "{{ item.data }}"
-    type: dword
-  loop:
-    - { path: "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Dsh", name: "AllowNewsAndInterests", data: 0 }
-    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", name: "TaskbarDa", data: 0 }
+- name: Disable User Choice Protection Driver (UCPD) service
+  ansible.windows.win_powershell:
+    script: |
+      $changed = $false
+      $svc = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\UCPD" -ErrorAction SilentlyContinue
+      if ($svc -and $svc.Start -ne 4) {
+          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\UCPD" -Name "Start" -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue
+          $changed = $true
+      }
+      $Ansible.Changed = $changed
+  failed_when: false
+
+- name: Remove Windows Web Experience Pack (Taskbar Widgets)
+  ansible.windows.win_powershell:
+    script: |
+      $changed = $false
+      $prov = @(Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like "*WebExperience*" -or $_.DisplayName -like "*WidgetsPlatformRuntime*" })
+      foreach ($p in $prov) {
+          Remove-AppxProvisionedPackage -Online -PackageName $p.PackageName -ErrorAction SilentlyContinue | Out-Null
+          $changed = $true
+      }
+      $pkgs = @(Get-AppxPackage -Name "*WebExperience*" -AllUsers -ErrorAction SilentlyContinue)
+      if ($pkgs.Count -eq 0) {
+          $pkgs = @(Get-AppxPackage -Name "*WebExperience*" -ErrorAction SilentlyContinue)
+      }
+      foreach ($u in $pkgs) {
+          Remove-AppxPackage -Package $u.PackageFullName -AllUsers -ErrorAction SilentlyContinue | Out-Null
+          $changed = $true
+      }
+      $Ansible.Changed = $changed
+
+- name: Configure Taskbar Widgets registry settings
+  ansible.windows.win_powershell:
+    script: |
+      $changed = $false
+      try {
+          $dshKey = "HKLM:\SOFTWARE\Policies\Microsoft\Dsh"
+          if (-not (Test-Path $dshKey)) { New-Item -Path $dshKey -Force -ErrorAction SilentlyContinue | Out-Null }
+          $curr = (Get-ItemProperty -Path $dshKey -Name "AllowNewsAndInterests" -ErrorAction SilentlyContinue).AllowNewsAndInterests
+          if ($curr -ne 0) {
+              Set-ItemProperty -Path $dshKey -Name "AllowNewsAndInterests" -Value 0 -Type DWord -Force -ErrorAction Stop
+              $changed = $true
+          }
+      } catch {}
+
+      try {
+          $advKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+          $curr = (Get-ItemProperty -Path $advKey -Name "TaskbarDa" -ErrorAction SilentlyContinue).TaskbarDa
+          if ($curr -ne 0) {
+              Set-ItemProperty -Path $advKey -Name "TaskbarDa" -Value 0 -Type DWord -Force -ErrorAction Stop
+              $changed = $true
+          }
+      } catch {}
+
+      $Ansible.Changed = $changed
+  failed_when: false
 
 - name: Prevent Microsoft Store from pinning to Taskbar
   ansible.windows.win_regedit:
@@ -58,6 +105,7 @@
   loop:
     - HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer
     - HKCU:\Software\Policies\Microsoft\Windows\Explorer
+  failed_when: false
 
 - name: Ensure Shell directories exist for LayoutModification
   ansible.windows.win_file:

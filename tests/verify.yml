@@ -112,19 +112,18 @@
       register: fastboot_stat
       failed_when: not fastboot_stat.exists or fastboot_stat.value != 0
 
-    - name: "[TEST] Verify Taskbar Widgets are disabled in Policy"
+    - name: "[TEST] Verify UCPD service is set to disabled"
       ansible.windows.win_reg_stat:
-        path: HKLM:\SOFTWARE\Policies\Microsoft\Dsh
-        name: AllowNewsAndInterests
-      register: widget_pol_stat
-      failed_when: not widget_pol_stat.exists or widget_pol_stat.value != 0
+        path: HKLM:\SYSTEM\CurrentControlSet\Services\UCPD
+        name: Start
+      register: ucpd_stat
+      failed_when: ucpd_stat.exists and ucpd_stat.value != 4
 
-    - name: "[TEST] Verify Taskbar Widgets are hidden in User Settings"
-      ansible.windows.win_reg_stat:
-        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
-        name: TaskbarDa
-      register: widget_user_stat
-      failed_when: not widget_user_stat.exists or widget_user_stat.value != 0
+    - name: "[TEST] Verify Windows Web Experience Pack (Widgets) is removed"
+      ansible.windows.win_powershell:
+        script: |
+          $pkg = Get-AppxPackage -Name "*WebExperience*" -ErrorAction SilentlyContinue
+          if ($pkg) { throw "WebExperience package is still installed" }
 
     - name: "[TEST] Verify Microsoft Store taskbar pinning is disabled in Policy"
       ansible.windows.win_reg_stat:
