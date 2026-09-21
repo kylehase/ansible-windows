@@ -7,8 +7,8 @@
 install_profile: "full"
 
 # Hardware / Accessory integrations
-apply_dell_icc_profile: true
-enable_canon_scanner: true
+apply_dell_icc_profile: false
+enable_canon_scanner: false
 touchpad_scroll_direction: 4294967295  # Down motion scrolls down
 
 # Display scaling (250% scale instead of default 300%)
@@ -24,10 +24,16 @@ exclude_packages:
   - Audacity.Audacity
   - Logitech.CameraSettings
   - Docker.DockerDesktop
+  - Canva.Affinity
+  - Dell.DisplayAndPeripheralManager
+  - Git.Git
+  - HandBrake.HandBrake
+  - RedHat.VirtViewer
+  - Meltytech.Shotcut
+  - KDE.digiKam
+  - darktable.darktable
+  - Apple.Bonjour
 
 # Actively uninstall/remove if currently present on X1-YOGA:
-uninstall_packages:
-  - Oracle.VirtualBox
-  - Audacity.Audacity
-  - Logitech.CameraSettings
-  - Docker.DockerDesktop
+uninstall_packages: []
+
