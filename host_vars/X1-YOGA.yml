@@ -13,31 +13,8 @@ touchpad_scroll_direction: 4294967295  # Down motion scrolls down
 # Display scaling (250% scale instead of default 300%)
 display_scaling: 250
 
-# Package overrides
-# Add additional winget package IDs specific to this laptop:
-extra_packages: []
-
-# Exclude packages from installation on X1-YOGA:
-exclude_packages:
-  - Oracle.VirtualBox
-  - Audacity.Audacity
-  - Logitech.CameraSettings
-  - Docker.DockerDesktop
-  - Canva.Affinity
-  - Git.Git
-  - HandBrake.HandBrake
-  - RedHat.VirtViewer
-  - Meltytech.Shotcut
-  - KDE.digiKam
-  - darktable.darktable
-  - Apple.Bonjour
-  - Google.AndroidStudio
-  - WinSCP.WinSCP
-  - Tweaking4All.RenameMyTVSeries
-  - Python.Python.3.14
-  - Python.Launcher
-  - MoritzBunkus.MKVToolNix
-
-# Actively uninstall/remove if currently present on X1-YOGA:
-uninstall_packages: []
+# Package overrides (inherits defaults from roles/packages/defaults/main.yml)
+# extra_packages: []
+# exclude_packages: []
+# uninstall_packages: []
 

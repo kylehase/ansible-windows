@@ -13,5 +13,6 @@ display_scaling: null
 # Network Printer Configuration (Brother HL-L3230CDW)
 enable_network_printer: true
 printer_ip: "192.168.50.5"
-printer_name: "Brother HL-L3230CDW series Printer"
+printer_name: "Brother HL-L3230CDW"
+printer_driver: "Brother Laser Type1 Class Driver"
 
