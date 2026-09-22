@@ -1,0 +1,28 @@
+---
+- name: Configure Network Printer and Standard TCP/IP Port
+  ansible.windows.win_powershell:
+    script: |
+      $changed = $false
+      $printerName = "{{ printer_name }}"
+      $printerIp = "{{ printer_ip }}"
+      $portName = "IP_$printerIp"
+      $driverName = "Microsoft IPP Class Driver"
+
+      # 1. Ensure Standard TCP/IP Port exists
+      $port = Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue
+      if (-not $port) {
+          Add-PrinterPort -Name $portName -PrinterHostAddress $printerIp -ErrorAction Stop
+          $changed = $true
+      }
+
+      # 2. Ensure Printer exists and is bound to the port
+      $printer = Get-Printer -Name $printerName -ErrorAction SilentlyContinue
+      if (-not $printer) {
+          Add-Printer -Name $printerName -DriverName $driverName -PortName $portName -ErrorAction Stop
+          $changed = $true
+      } elseif ($printer.PortName -ne $portName) {
+          Set-Printer -Name $printerName -PortName $portName -ErrorAction Stop
+          $changed = $true
+      }
+
+      $Ansible.Changed = $changed

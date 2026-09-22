@@ -11,6 +11,10 @@ apply_dell_icc_profile: false
 enable_canon_scanner: true
 touchpad_scroll_direction: 4294967295  # Down motion scrolls down
 
+# ThinkPad & Hardware Tweaks (X1-CARBON only)
+enable_lenovo_battery_gauge: true
+enable_lenovo_mic_mute_tweak: true
+
 # Package overrides
 # Add additional winget package IDs specific to this laptop:
 extra_packages: []

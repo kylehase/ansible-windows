@@ -13,3 +13,8 @@ apply_dell_icc_profile: false
 # null leaves the system default / per-monitor setting untouched
 display_scaling: null
 
+# Network Printer Configuration (Brother HL-L3230CDW)
+enable_network_printer: true
+printer_ip: "192.168.50.5"
+printer_name: "Brother HL-L3230CDW series Printer"
+

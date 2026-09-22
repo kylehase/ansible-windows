@@ -62,6 +62,77 @@
       register: thispc_stat
       failed_when: not thispc_stat.exists or thispc_stat.value != 1
 
+    - name: "[TEST] Verify Dark Mode is enabled for System and Apps"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize
+        name: "{{ item }}"
+      register: dark_mode_stat
+      loop:
+        - SystemUsesLightTheme
+        - AppsUseLightTheme
+      failed_when: not dark_mode_stat.exists or dark_mode_stat.value != 0
+
+    - name: "[TEST] Verify File Explorer opens to This PC"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+        name: LaunchTo
+      register: launchto_stat
+      failed_when: not launchto_stat.exists or launchto_stat.value != 1
+
+    - name: "[TEST] Verify Full Path in Explorer Title Bar is enabled"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CabinetState
+        name: FullPath
+      register: fullpath_stat
+      failed_when: not fullpath_stat.exists or fullpath_stat.value != 1
+
+    - name: "[TEST] Verify Hidden Files are set to show"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+        name: Hidden
+      register: hidden_stat
+      failed_when: not hidden_stat.exists or hidden_stat.value != 1
+
+    - name: "[TEST] Verify Taskbar Copilot and Chat buttons are hidden"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced
+        name: "{{ item }}"
+      register: taskbar_declutter_stat
+      loop:
+        - ShowCopilotButton
+        - TaskbarMn
+      failed_when: not taskbar_declutter_stat.exists or taskbar_declutter_stat.value != 0
+
+    - name: "[TEST] Verify Sticky Keys prompt is disabled"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Control Panel\Accessibility\StickyKeys
+        name: Flags
+      register: sticky_stat
+      failed_when: not sticky_stat.exists or sticky_stat.value != "506"
+
+    - name: "[TEST] Verify Windows Update NoAutoRebootWithLoggedOnUsers is enabled"
+      ansible.windows.win_reg_stat:
+        path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU
+        name: NoAutoRebootWithLoggedOnUsers
+      register: no_reboot_stat
+      failed_when: not no_reboot_stat.exists or no_reboot_stat.value != 1
+
+    - name: "[TEST] Verify Delivery Optimization is restricted to LAN mode"
+      ansible.windows.win_reg_stat:
+        path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization
+        name: DODownloadMode
+      register: do_stat
+      failed_when: not do_stat.exists or do_stat.value != 1
+
+    - name: "[TEST] Verify Brother Network Printer and Port"
+      when: enable_network_printer | default(true) | bool
+      ansible.windows.win_powershell:
+        script: |
+          $p = Get-Printer -Name "{{ printer_name }}" -ErrorAction SilentlyContinue
+          $port = Get-PrinterPort -Name "IP_{{ printer_ip }}" -ErrorAction SilentlyContinue
+          if (-not $p) { throw "Printer '{{ printer_name }}' not found" }
+          if (-not $port) { throw "Printer port 'IP_{{ printer_ip }}' not found" }
+
     - name: "[TEST] Verify only Chrome shortcut remains on Desktop"
       ansible.windows.win_powershell:
         script: |
@@ -102,6 +173,20 @@
         name: BingSearchEnabled
       register: bing_stat
       failed_when: not bing_stat.exists or bing_stat.value != 0
+
+    - name: "[TEST] Verify Advertising ID is disabled"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo
+        name: Enabled
+      register: adv_stat
+      failed_when: not adv_stat.exists or adv_stat.value != 0
+
+    - name: "[TEST] Verify Diagnostic Tailored Experiences is disabled"
+      ansible.windows.win_reg_stat:
+        path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Privacy
+        name: TailoredExperiencesWithDiagnosticDataEnabled
+      register: tailored_stat
+      failed_when: not tailored_stat.exists or tailored_stat.value != 0
 
     - name: "[TEST] Verify Windows 10 Classic Context Menu CLSID exists"
       ansible.windows.win_reg_stat:
@@ -215,6 +300,16 @@
         path: "C:\\Users\\{{ ansible_user }}\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\volume-increment_v2new.lnk"
       register: vol_lnk
       failed_when: vol_lnk.stat.exists
+
+    - name: "[TEST] Verify PowerToys settings file exists and has enabled modules"
+      ansible.windows.win_powershell:
+        script: |
+          $path = "C:\Users\{{ ansible_user }}\AppData\Local\Microsoft\PowerToys\settings.json"
+          if (Test-Path $path) {
+              $json = Get-Content $path -Raw -Encoding utf8 | ConvertFrom-Json
+              if (-not $json.enabled) { throw "enabled property missing from PowerToys settings" }
+          }
+
 
     - name: Summary
       ansible.builtin.debug:

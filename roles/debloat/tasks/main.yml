@@ -19,6 +19,32 @@
     - dmwappushservice
   failed_when: false
 
+- name: Disable Windows Advertising ID
+  ansible.windows.win_regedit:
+    path: HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo
+    name: Enabled
+    data: 0
+    type: dword
+
+- name: Disable Diagnostic Tailored Experiences
+  ansible.windows.win_regedit:
+    path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Privacy
+    name: TailoredExperiencesWithDiagnosticDataEnabled
+    data: 0
+    type: dword
+
+- name: Disable Lock Screen Suggestions, Promos, and Content Delivery
+  ansible.windows.win_regedit:
+    path: HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager
+    name: "{{ item }}"
+    data: 0
+    type: dword
+  loop:
+    - SubscribedContent-338387Enabled
+    - RotatingLockScreenOverlayEnabled
+    - SoftLandingEnabled
+    - SystemPaneSuggestionsEnabled
+
 # ---------------------------------------------------------
 # Start Menu & Search Tweaks
 # ---------------------------------------------------------
@@ -31,6 +57,7 @@
   loop:
     - { path: "HKCU:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer", name: "DisableSearchBoxSuggestions", data: 1 }
     - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search", name: "BingSearchEnabled", data: 0 }
+    - { path: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search", name: "ConnectedSearchUseWeb", data: 0 }
 
 - name: Hide Search bar on Taskbar
   ansible.windows.win_regedit:

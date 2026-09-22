@@ -135,3 +135,54 @@
   ansible.windows.win_file:
     path: "C:\\Users\\{{ ansible_user }}\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\volume-increment_v2new.lnk"
     state: absent
+
+- name: Deploy PowerToys module preferences template
+  ansible.windows.win_copy:
+    src: powertoys_modules.json
+    dest: "C:\\Users\\{{ ansible_user }}\\AppData\\Local\\Temp\\powertoys_modules.json"
+
+- name: Apply PowerToys module preferences
+  ansible.windows.win_powershell:
+    script: |
+      $changed = $false
+      $ptDir = "C:\Users\{{ ansible_user }}\AppData\Local\Microsoft\PowerToys"
+      $settingsFile = Join-Path $ptDir "settings.json"
+      $modulesFile = "C:\Users\{{ ansible_user }}\AppData\Local\Temp\powertoys_modules.json"
+
+      if (Test-Path $modulesFile) {
+          $targetModules = Get-Content -Path $modulesFile -Raw -Encoding utf8 | ConvertFrom-Json
+
+          if (-not (Test-Path $ptDir)) {
+              New-Item -ItemType Directory -Path $ptDir -Force | Out-Null
+          }
+
+          $settings = @{}
+          if (Test-Path $settingsFile) {
+              try {
+                  $settings = Get-Content -Path $settingsFile -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable
+              } catch {
+                  $settings = @{}
+              }
+          }
+
+          if (-not $settings.ContainsKey("enabled") -or -not ($settings["enabled"] -is [System.Collections.IDictionary])) {
+              $settings["enabled"] = @{}
+          }
+
+          foreach ($prop in $targetModules.PSObject.Properties) {
+              $name = $prop.Name
+              $val = [bool]$prop.Value
+              if (-not $settings["enabled"].Contains($name) -or ($settings["enabled"][$name] -ne $val)) {
+                  $settings["enabled"][$name] = $val
+                  $changed = $true
+              }
+          }
+
+          if ($changed) {
+              $settings | ConvertTo-Json -Depth 10 | Set-Content -Path $settingsFile -Encoding utf8 -Force
+          }
+          Remove-Item -Path $modulesFile -Force -ErrorAction SilentlyContinue
+      }
+
+      $Ansible.Changed = $changed
+
