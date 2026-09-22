@@ -1,4 +1,12 @@
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host "ERROR: bootstrap.ps1 must be run in an elevated PowerShell session (Run as Administrator)!" -ForegroundColor Red
+    Write-Host "Please open PowerShell as Administrator and run the script again." -ForegroundColor Yellow
+    exit 1
+}
+
 Write-Host "=== Configuring Windows for Ansible Management ===" -ForegroundColor Cyan
+
 
 # 0. Prompt to rename computer if needed
 $currentHost = $env:COMPUTERNAME
