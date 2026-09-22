@@ -89,9 +89,21 @@
           ansible.builtin.include_role:
             name: system_tweaks
 
-        - name: Run debloat role
+        - name: Check if debloat has already been completed
+          ansible.windows.win_stat:
+            path: "C:\\ProgramData\\ansible_debloat.done"
+          register: debloat_sentinel
+
+        - name: Run debloat role (first run only)
+          when: not debloat_sentinel.stat.exists or (force_debloat | default(false) | bool)
           ansible.builtin.include_role:
             name: debloat
+
+        - name: Mark debloat as completed
+          when: not debloat_sentinel.stat.exists or (force_debloat | default(false) | bool)
+          ansible.windows.win_file:
+            path: "C:\\ProgramData\\ansible_debloat.done"
+            state: touch
 
         - name: Run packages role
           ansible.builtin.include_role:

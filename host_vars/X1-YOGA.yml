@@ -13,8 +13,36 @@ touchpad_scroll_direction: 4294967295  # Down motion scrolls down
 # Display scaling (250% scale instead of default 300%)
 display_scaling: 250
 
-# Package overrides (inherits defaults from roles/packages/defaults/main.yml)
-# extra_packages: []
-# exclude_packages: []
-# uninstall_packages: []
+# Package overrides
+extra_packages: []
+
+# Skip packages on YOGA (prevent future installation):
+exclude_packages:
+  - Mozilla.Firefox
+  - Jellyfin.JellyfinMediaPlayer
+  - Apple.Bonjour
+  - Tweaking4All.RenameMyTVSeries
+  - Bitvise.SSH.Client
+  - WinSCP.WinSCP
+  - Git.Git
+  - vim.vim
+  - Python.Python.3.14
+  - Python.Launcher
+  - Google.AndroidStudio
+  - Docker.DockerDesktop
+  - Audacity.Audacity
+  - HandBrake.HandBrake
+  - MoritzBunkus.MKVToolNix
+  - Meltytech.Shotcut
+  - Canva.Affinity
+  - darktable.darktable
+  - KDE.digiKam
+  - RawTherapee.RawTherapee
+  - Oracle.VirtualBox
+  - RedHat.VirtViewer
+  - Logitech.CameraSettings
+  - Lenovo.ServiceBridge
+
+# Do not actively uninstall existing packages
+uninstall_packages: []
 

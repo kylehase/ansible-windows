@@ -4,45 +4,8 @@ install_profile: "full"
 
 # Machine-specific package customizations
 extra_packages: []
-exclude_packages:
-  - Oracle.VirtualBox
-  - Audacity.Audacity
-  - Logitech.CameraSettings
-  - Docker.DockerDesktop
-  - Canva.Affinity
-  - Git.Git
-  - HandBrake.HandBrake
-  - RedHat.VirtViewer
-  - Meltytech.Shotcut
-  - KDE.digiKam
-  - darktable.darktable
-  - Apple.Bonjour
-  - Google.AndroidStudio
-  - WinSCP.WinSCP
-  - Tweaking4All.RenameMyTVSeries
-  - Python.Python.3.14
-  - Python.Launcher
-  - MoritzBunkus.MKVToolNix
-
-uninstall_packages:
-  - Oracle.VirtualBox
-  - Audacity.Audacity
-  - Logitech.CameraSettings
-  - Docker.DockerDesktop
-  - Canva.Affinity
-  - Git.Git
-  - HandBrake.HandBrake
-  - RedHat.VirtViewer
-  - Meltytech.Shotcut
-  - KDE.digiKam
-  - darktable.darktable
-  - Apple.Bonjour
-  - Google.AndroidStudio
-  - WinSCP.WinSCP
-  - Tweaking4All.RenameMyTVSeries
-  - Python.Python.3.14
-  - Python.Launcher
-  - MoritzBunkus.MKVToolNix
+exclude_packages: []
+uninstall_packages: []
 
 # Feature and hardware toggles
 enable_canon_scanner: false

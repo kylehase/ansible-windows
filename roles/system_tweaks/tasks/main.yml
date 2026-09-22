@@ -360,13 +360,27 @@
     data: 1
     type: dword
 
-- name: Configure Lenovo hardware microphone mute (ThinkPad only)
-  when: enable_lenovo_mic_mute_tweak | default(false)
-  ansible.windows.win_regedit:
-    path: HKCU:\Software\Lenovo\MicMute
-    name: MuteMethod
-    data: 0
-    type: dword
+- name: Configure Internal ThinkPad OLED Display Scaling
+  when: internal_display_scaling is defined and internal_display_scaling is not none
+  ansible.windows.win_powershell:
+    script: |
+      $targetScale = [int]"{{ internal_display_scaling }}"
+      $dpiMap = @{ 100 = 0; 125 = 1; 150 = 2; 175 = 3; 200 = 4; 225 = 5; 250 = 6; 300 = 7 }
+      $targetDpiVal = if ($dpiMap.ContainsKey($targetScale)) { $dpiMap[$targetScale] } else { 3 }
+
+      $changed = $false
+      $baseKey = "HKCU:\Control Panel\Desktop\PerMonitorSettings"
+      if (Test-Path $baseKey) {
+          $lenMonitors = Get-ChildItem $baseKey -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -like "LEN*" }
+          foreach ($m in $lenMonitors) {
+              $curr = (Get-ItemProperty -Path $m.PSPath -Name "DpiValue" -ErrorAction SilentlyContinue).DpiValue
+              if ($curr -ne $targetDpiVal) {
+                  Set-ItemProperty -Path $m.PSPath -Name "DpiValue" -Value $targetDpiVal -Type DWord -Force
+                  $changed = $true
+              }
+          }
+      }
+      $Ansible.Changed = $changed
 
 # ------------------------------------------------------------------------------
 # Network Printer

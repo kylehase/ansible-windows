@@ -10,11 +10,13 @@ install_profile: "full"
 enable_canon_scanner: true
 touchpad_scroll_direction: 4294967295  # Down motion scrolls down
 
-# ThinkPad & Hardware Tweaks (X1-CARBON only)
+# ThinkPad Hardware Tweaks (X1-CARBON only)
 enable_lenovo_battery_gauge: true
-enable_lenovo_mic_mute_tweak: true
 
-# Package overrides (inherits defaults from roles/packages/defaults/main.yml)
-# extra_packages: []
-# exclude_packages: []
-# uninstall_packages: []
+# Internal OLED Display Scaling (175% for 2880x1800 14" panel, leaves external Dell at 100%)
+internal_display_scaling: 175
+
+# Package overrides (X1-CARBON keeps full workstation suite)
+extra_packages: []
+exclude_packages: []
+uninstall_packages: []
