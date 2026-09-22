@@ -1,3 +1,9 @@
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $false)]
+    [string]$AuthorizedKey
+)
+
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Host "ERROR: bootstrap.ps1 must be run in an elevated PowerShell session (Run as Administrator)!" -ForegroundColor Red
