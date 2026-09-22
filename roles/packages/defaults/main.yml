@@ -53,6 +53,5 @@ workstation_packages:
   - KDE.digiKam
   - RawTherapee.RawTherapee
   - Prusa3D.PrusaSlicer
-  - Dell.DisplayAndPeripheralManager
   - Logitech.CameraSettings
   - Lenovo.ServiceBridge
